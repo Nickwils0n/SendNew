@@ -110,6 +110,12 @@
     <span class="label" style="font-size:11px">Needed to read incoming messages</span>
     <button id="fdaBtn">Open Settings</button>
   </div>
+  <div class="row">
+    <span class="label">Launch at Login</span>
+    <span class="value">
+      <input type="checkbox" id="launchAtLogin" />
+    </span>
+  </div>
 
   <div id="error"></div>
 
@@ -218,6 +224,14 @@
 
     document.getElementById("fdaBtn").addEventListener("click", () => {
       window.sendnew.openFullDiskAccessSettings();
+    });
+
+    const launchAtLoginEl = document.getElementById("launchAtLogin");
+    window.sendnew.getLaunchAtLogin().then((enabled) => {
+      launchAtLoginEl.checked = enabled;
+    });
+    launchAtLoginEl.addEventListener("change", () => {
+      window.sendnew.setLaunchAtLogin(launchAtLoginEl.checked);
     });
 
     // Full Disk Access requires an app restart to take effect after granting —

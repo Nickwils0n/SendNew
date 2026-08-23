@@ -64,7 +64,18 @@ anything that doesn't match or is missing the header.
 ## Agent (Mac mini) ↔ server
 
 - `POST /agent/login` `{ username, password }` → `{ token, device }`. The
-  agent stores `token` (macOS Keychain) and reconnects with it.
+  agent stores `token` (macOS Keychain) and reconnects with it. This is for a
+  device you already provisioned via `POST /admin/devices`.
+- `POST /agent/register` `{ setupCode, label? }` → `{ token, credentials, device }`.
+  Self-service registration for a brand-new Mac mini, used by the DMG's
+  "Register this device" flow so you don't have to run `admin/devices` curl
+  commands by hand for every machine. Requires the server's
+  `DEVICE_SETUP_CODE` env var to be set — `setupCode` must match it exactly,
+  or the endpoint returns `503` (unset) / `401` (wrong code). Creates a new,
+  **unassigned** device with a randomly generated username/password; assign
+  it to a company afterward the normal way (`POST /admin/devices/:id/assign`).
+  `credentials` is returned once for the operator's own records — the app
+  itself only needs the `token` it already stored.
 - `WS /agent/socket?token=<jwt>` — one persistent connection per device.
   - Agent → server: `heartbeat`, `inbound_message`, `status_update`, `log`.
   - Server → agent: `send_message`, `start_facetime`.

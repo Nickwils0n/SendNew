@@ -14,7 +14,8 @@
     height: 100vh;
     margin: 0;
   }
-  form { width: 260px; display: flex; flex-direction: column; gap: 10px; }
+  .panel { width: 260px; display: flex; flex-direction: column; gap: 10px; }
+  form { display: flex; flex-direction: column; gap: 10px; }
   h1 { font-size: 15px; text-align: center; margin-bottom: 4px; }
   input {
     padding: 8px 10px;
@@ -35,26 +36,79 @@
   }
   button:disabled { opacity: 0.5; cursor: default; }
   #error { color: #ff453a; font-size: 12px; min-height: 14px; text-align: center; }
+  .toggle {
+    text-align: center;
+    font-size: 12px;
+    color: #6e6e73;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .hint { font-size: 11px; color: #6e6e73; text-align: center; margin-top: -4px; }
+  #registerResult {
+    display: none;
+    background: #1e2a1e;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  #registerResult code { color: #30d158; user-select: text; }
 </style>
 </head>
 <body>
-  <form id="loginForm">
-    <h1>Connect this Mac to SendNew</h1>
-    <input id="username" placeholder="Device username" autocomplete="username" />
-    <input id="password" type="password" placeholder="Device password" autocomplete="current-password" />
+  <div class="panel">
+    <div id="signInMode">
+      <h1>Connect this Mac to SendNew</h1>
+      <form id="loginForm">
+        <input id="username" placeholder="Device username" autocomplete="username" />
+        <input id="password" type="password" placeholder="Device password" autocomplete="current-password" />
+        <div id="loginError" class="error-slot"></div>
+        <button id="loginSubmit" type="submit">Connect</button>
+      </form>
+      <p class="toggle" id="showRegister">Setting up a brand-new Mac? Register it →</p>
+    </div>
+
+    <div id="registerMode" style="display:none">
+      <h1>Register this Mac</h1>
+      <p class="hint">Ask whoever manages SendNew for the setup code.</p>
+      <form id="registerForm">
+        <input id="setupCode" placeholder="Setup code" />
+        <input id="label" placeholder="Label (e.g. Rack A #3) — optional" />
+        <div id="registerError" class="error-slot"></div>
+        <button id="registerSubmit" type="submit">Register</button>
+      </form>
+      <div id="registerResult"></div>
+      <p class="toggle" id="showLogin">Already have credentials? Sign in →</p>
+    </div>
+
     <div id="error"></div>
-    <button id="submit" type="submit">Connect</button>
-  </form>
+  </div>
+
   <script>
-    const form = document.getElementById("loginForm");
-    const submitBtn = document.getElementById("submit");
     const errorEl = document.getElementById("error");
 
-    form.addEventListener("submit", async (e) => {
+    const signInMode = document.getElementById("signInMode");
+    const registerMode = document.getElementById("registerMode");
+    document.getElementById("showRegister").addEventListener("click", () => {
+      signInMode.style.display = "none";
+      registerMode.style.display = "block";
+      errorEl.textContent = "";
+    });
+    document.getElementById("showLogin").addEventListener("click", () => {
+      registerMode.style.display = "none";
+      signInMode.style.display = "block";
+      errorEl.textContent = "";
+    });
+
+    // --- Sign in ---
+    const loginForm = document.getElementById("loginForm");
+    const loginSubmit = document.getElementById("loginSubmit");
+
+    loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       errorEl.textContent = "";
-      submitBtn.disabled = true;
-      submitBtn.textContent = "Connecting...";
+      loginSubmit.disabled = true;
+      loginSubmit.textContent = "Connecting...";
 
       const username = document.getElementById("username").value.trim();
       const password = document.getElementById("password").value;
@@ -62,10 +116,44 @@
       const result = await window.sendnew.login(username, password);
       if (result.error) {
         errorEl.textContent = result.error;
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Connect";
+        loginSubmit.disabled = false;
+        loginSubmit.textContent = "Connect";
       }
       // On success the main process closes this window and starts the agent.
+    });
+
+    // --- Register ---
+    const registerForm = document.getElementById("registerForm");
+    const registerSubmit = document.getElementById("registerSubmit");
+    const registerResult = document.getElementById("registerResult");
+
+    registerForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorEl.textContent = "";
+      registerSubmit.disabled = true;
+      registerSubmit.textContent = "Registering...";
+
+      const setupCode = document.getElementById("setupCode").value.trim();
+      const label = document.getElementById("label").value.trim();
+
+      const result = await window.sendnew.register(setupCode, label);
+      if (result.error) {
+        errorEl.textContent = result.error;
+        registerSubmit.disabled = false;
+        registerSubmit.textContent = "Register";
+        return;
+      }
+
+      // The app is already signed in at this point (main process stored the
+      // token and started the agent) — this is just showing the generated
+      // username for the operator's records before they close the window.
+      registerForm.style.display = "none";
+      registerResult.style.display = "block";
+      registerResult.innerHTML =
+        `Registered as <code>${result.device.username}</code>.<br>` +
+        `Ask your admin to assign it to a company on the SendNew server.<br><br>` +
+        `<button id="doneBtn" style="width:100%">Done</button>`;
+      document.getElementById("doneBtn").addEventListener("click", () => window.close());
     });
   </script>
 </body>

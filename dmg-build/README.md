@@ -93,20 +93,49 @@ instead of Electron's. `npm install` runs `electron-rebuild` automatically
 via its `postinstall` script to fix this — if you still hit it, run
 `npx electron-rebuild -f -w better-sqlite3,keytar` by hand and retry.
 
-## Per-device credentials
+## Per-device credentials: registering a new Mac mini
 
-Each Mac mini needs its own username/password from the server (see
-`server/README.md` → "provision your first company + device"). Two ways to
-hand it to a machine:
+Three ways to get a Mac mini connected, from most to least hands-on for you:
 
-- **Manual**: type it into the login window on first launch (what the app
-  ships with by default).
-- **Pre-seeded**: if you'd rather not type credentials on 20+ machines by
-  hand, have your provisioning script drop a token straight into Keychain
-  (`security add-generic-password`) before first launch, keyed the same way
-  `keytar` reads it (`service: com.sendnew.agent`, `account: device-token`) —
-  skips the login screen entirely. Ask if you want this wired up; it's a
-  small addition to `main.js`.
+### 1. Self-registration (recommended for a fleet)
+
+Set `DEVICE_SETUP_CODE` on the server once (a shareable code, distinct from
+`ADMIN_SECRET` — see `server/.env.example`). Then on any Mac mini, after
+installing the DMG:
+
+1. Open the app. On the login screen, click **"Setting up a brand-new Mac?
+   Register it →"**.
+2. Enter the setup code (and optionally a label like "Rack A #3").
+3. Click **Register**. The app generates its own device credentials, signs
+   in immediately, and shows you the generated username once for your
+   records.
+4. The device now exists on the server as **unassigned** — go assign it to
+   a company the normal way:
+   ```bash
+   curl -X POST https://<railway-app>/admin/devices/<deviceId>/assign \
+     -H 'x-admin-secret: <ADMIN_SECRET>' -H 'content-type: application/json' \
+     -d '{"companyId":"<companyId>"}'
+   ```
+   (`GET /admin/devices` lists everything, newest first, if you need to find
+   the ID.)
+
+This is the flow for "someone downloads the app and registers a device
+themselves" — they only ever need the setup code, never `ADMIN_SECRET`.
+
+### 2. Manual (you provision ahead of time)
+
+Run `POST /admin/devices` yourself (see `server/README.md`) and hand that
+specific username/password to whoever's setting up that Mac — they type it
+into the login window's normal sign-in form.
+
+### 3. Pre-seeded (fully unattended)
+
+If you'd rather not type credentials on 20+ machines by hand, have your
+provisioning script drop a token straight into Keychain
+(`security add-generic-password`) before first launch, keyed the same way
+`keytar` reads it (`service: com.sendnew.agent`, `account: device-token`) —
+skips the login/registration screen entirely. Ask if you want this wired up;
+it's a small addition to `main.js`.
 
 ## Permissions at scale (the actual point of friction)
 

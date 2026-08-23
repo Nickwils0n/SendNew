@@ -232,6 +232,10 @@ ipcMain.handle("permissions:check", () => checkPermissions());
 ipcMain.handle("permissions:openFullDiskAccess", () => openFullDiskAccessSettings());
 ipcMain.handle("permissions:openAutomation", () => openAutomationSettings());
 ipcMain.handle("status:get", () => getStatusPayload());
+ipcMain.handle("loginItem:get", () => app.getLoginItemSettings().openAtLogin);
+ipcMain.handle("loginItem:set", (_event, enabled) => {
+  app.setLoginItemSettings({ openAtLogin: enabled, openAsHidden: enabled });
+});
 
 ipcMain.handle("auth:login", async (_event, { username, password }) => {
   let res;
@@ -252,6 +256,27 @@ ipcMain.handle("auth:login", async (_event, { username, password }) => {
   loginWindow?.close();
   loginWindow = null;
   return { ok: true, device: data.device };
+});
+
+ipcMain.handle("auth:register", async (_event, { setupCode, label }) => {
+  let res;
+  try {
+    res = await fetch(`${SERVER_HTTP_URL}/agent/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ setupCode, label }),
+    });
+  } catch (err) {
+    return { error: `Could not reach ${SERVER_HTTP_URL}: ${err.message}` };
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { error: data.error || `registration failed (HTTP ${res.status})` };
+
+  await keytar.setPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT, data.token);
+  startAgent(data.token, data.device);
+  // Window stays open here (unlike login) so the renderer can show the
+  // generated username before the operator closes it themselves.
+  return { ok: true, device: data.device, credentials: data.credentials };
 });
 
 app.whenReady().then(async () => {
