@@ -29,6 +29,14 @@ function openAutomationSettings() {
   );
 }
 
+// Needed by the FaceTime call-state watcher (System Events UI scripting of
+// FaceTime.app's window), separate from Automation. Also has no static check.
+function openAccessibilitySettings() {
+  return shell.openExternal(
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+  );
+}
+
 // Best-effort check run at startup; surfaced in the tray/login UI so the
 // operator knows exactly which manual step (or MDM profile) is still needed.
 function checkPermissions() {
@@ -44,4 +52,5 @@ module.exports = {
   checkPermissions,
   openFullDiskAccessSettings,
   openAutomationSettings,
+  openAccessibilitySettings,
 };

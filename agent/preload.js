@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("sendnew", {
   checkPermissions: () => ipcRenderer.invoke("permissions:check"),
   openFullDiskAccessSettings: () => ipcRenderer.invoke("permissions:openFullDiskAccess"),
   openAutomationSettings: () => ipcRenderer.invoke("permissions:openAutomation"),
+  openAccessibilitySettings: () => ipcRenderer.invoke("permissions:openAccessibility"),
   getStatus: () => ipcRenderer.invoke("status:get"),
   getLaunchAtLogin: () => ipcRenderer.invoke("loginItem:get"),
   setLaunchAtLogin: (enabled) => ipcRenderer.invoke("loginItem:set", enabled),

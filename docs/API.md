@@ -51,6 +51,31 @@ Your website should treat this the way it'd treat any inbound-message
 webhook: upsert the conversation, append the message, push to the open UI via
 your own websocket/polling.
 
+A second event fires zero or more times per FaceTime call, whenever the
+agent's window-title watcher observes a change:
+
+```json
+{
+  "event": "facetime.status",
+  "messageId": "...",
+  "conversationId": "...",
+  "kind": "FACETIME_VIDEO",
+  "raw": "Calling +15551234567…",
+  "error": null,
+  "observedAt": "..."
+}
+```
+
+**Treat `raw` as informational, not authoritative.** It's the literal text
+of FaceTime.app's window title, read via Accessibility/UI-scripting — there
+is no official Apple API for FaceTime call state. The exact strings it
+returns for "ringing" vs. "connected" vs. "ended" haven't been validated
+against real calls yet; expect to observe actual values from your webhook
+logs and adjust any UI you build around them accordingly. `raw` may also be
+`"NO_WINDOW"` (FaceTime window closed — likely call ended) or `"NOT_RUNNING"`.
+No event fires at all if Accessibility permission hasn't been granted to the
+agent.
+
 **Verifying it's really from SendNew:** every delivery carries an
 `x-sendnew-signature: sha256=<hex>` header, computed as
 `HMAC-SHA256(rawRequestBody, company.webhookSecret)`. `webhookSecret` is

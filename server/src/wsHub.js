@@ -1,7 +1,7 @@
 const { WebSocketServer } = require("ws");
 const { verifyDeviceToken } = require("./auth");
 const { prisma } = require("./db");
-const { deliverInboundToWebhook } = require("./webhooks");
+const { deliverInboundToWebhook, deliverFacetimeStatusToWebhook } = require("./webhooks");
 
 // deviceId -> ws connection
 const connections = new Map();
@@ -120,6 +120,17 @@ async function handleAgentMessage(deviceId, msg) {
       await prisma.message
         .update({ where: { id: msg.messageId }, data: { status: msg.status, error: msg.error || null } })
         .catch(() => {});
+      break;
+    }
+    case "facetime_status": {
+      // Best-effort call-state signal from the agent's window-title watcher
+      // (see agent/src/messagesBridge.js) -- not an official API, relayed
+      // live rather than persisted, since the raw values aren't validated
+      // against real call states yet.
+      if (!msg.messageId || !device.companyId) return;
+      const message = await prisma.message.findUnique({ where: { id: msg.messageId } });
+      if (!message) return;
+      await deliverFacetimeStatusToWebhook(device.companyId, message, msg.raw, msg.error);
       break;
     }
     case "log": {

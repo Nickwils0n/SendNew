@@ -8,6 +8,9 @@
   silently pre-authorizes the SendNew Agent app for:
     - SystemPolicyAllFiles   (Full Disk Access, to read ~/Library/Messages/chat.db)
     - AppleEvents            (Automation, to drive Messages.app via AppleScript)
+    - Accessibility          (to read FaceTime.app's window title for the
+                              best-effort call-state watcher; skip this
+                              block if you don't need FaceTime status)
 
   This is the only supported way to skip the manual click-through prompts —
   no installer/DMG can grant these on its own. You MUST fill in:
@@ -80,6 +83,19 @@
             <string>bundleID</string>
             <key>AEReceiverCodeRequirement</key>
             <string>identifier "com.apple.systemevents" and anchor apple</string>
+            <key>Authorization</key>
+            <string>Allow</string>
+          </dict>
+        </array>
+        <key>Accessibility</key>
+        <array>
+          <dict>
+            <key>Identifier</key>
+            <string>com.sendnew.agent</string>
+            <key>IdentifierType</key>
+            <string>bundleID</string>
+            <key>CodeRequirement</key>
+            <string>REPLACE-WITH-CODESIGN-REQUIREMENT</string>
             <key>Authorization</key>
             <string>Allow</string>
           </dict>

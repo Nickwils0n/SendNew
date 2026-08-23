@@ -111,6 +111,14 @@
     <button id="fdaBtn">Open Settings</button>
   </div>
   <div class="row">
+    <span class="label">Accessibility</span>
+    <span class="value" style="color:#a1a1a6">Grant if FaceTime status stops updating</span>
+  </div>
+  <div class="row">
+    <span class="label" style="font-size:11px">Needed for FaceTime call-state tracking</span>
+    <button id="accessibilityBtn">Open Settings</button>
+  </div>
+  <div class="row">
     <span class="label">Launch at Login</span>
     <span class="value">
       <input type="checkbox" id="launchAtLogin" />
@@ -224,6 +232,9 @@
 
     document.getElementById("fdaBtn").addEventListener("click", () => {
       window.sendnew.openFullDiskAccessSettings();
+    });
+    document.getElementById("accessibilityBtn").addEventListener("click", () => {
+      window.sendnew.openAccessibilitySettings();
     });
 
     const launchAtLoginEl = document.getElementById("launchAtLogin");

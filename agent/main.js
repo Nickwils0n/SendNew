@@ -4,9 +4,14 @@ const path = require("path");
 const keytar = require("keytar");
 
 const { AgentSocket } = require("./src/wsClient");
-const { sendIMessage, sendIMessageAttachment, startFaceTime } = require("./src/messagesBridge");
+const { sendIMessage, sendIMessageAttachment, startFaceTime, watchFaceTimeCall } = require("./src/messagesBridge");
 const { watchChatDb } = require("./src/chatDbWatcher");
-const { checkPermissions, openFullDiskAccessSettings, openAutomationSettings } = require("./src/permissions");
+const {
+  checkPermissions,
+  openFullDiskAccessSettings,
+  openAutomationSettings,
+  openAccessibilitySettings,
+} = require("./src/permissions");
 
 const pkg = require("./package.json");
 
@@ -185,14 +190,30 @@ function startAgent(token, device) {
       }
     },
     onStartFacetime: async (msg) => {
+      const kind = msg.video ? "facetime_video" : "facetime_audio";
       try {
         await startFaceTime(msg.to, msg.video);
         socket.send({ type: "status_update", messageId: msg.messageId, status: "SENT" });
-        logTraffic({
-          direction: "out",
-          kind: msg.video ? "facetime_video" : "facetime_audio",
-          contact: msg.to,
-          status: "sent",
+        logTraffic({ direction: "out", kind, contact: msg.to, status: "sent" });
+
+        // Best-effort: start watching FaceTime's window for call-state
+        // changes now that the call has been placed. Not blocking, not
+        // guaranteed to say anything meaningful — see messagesBridge.js.
+        watchFaceTimeCall((update) => {
+          socket.send({
+            type: "facetime_status",
+            messageId: msg.messageId,
+            raw: update.raw,
+            error: update.error,
+          });
+          logTraffic({
+            direction: "out",
+            kind,
+            contact: msg.to,
+            body: update.raw ? `[call state: ${update.raw}]` : null,
+            status: update.error ? "failed" : "sent",
+            error: update.error,
+          });
         });
       } catch (err) {
         socket.send({
@@ -201,13 +222,7 @@ function startAgent(token, device) {
           status: "FAILED",
           error: err.message,
         });
-        logTraffic({
-          direction: "out",
-          kind: msg.video ? "facetime_video" : "facetime_audio",
-          contact: msg.to,
-          status: "failed",
-          error: err.message,
-        });
+        logTraffic({ direction: "out", kind, contact: msg.to, status: "failed", error: err.message });
       }
     },
   });
@@ -231,6 +246,7 @@ function startAgent(token, device) {
 ipcMain.handle("permissions:check", () => checkPermissions());
 ipcMain.handle("permissions:openFullDiskAccess", () => openFullDiskAccessSettings());
 ipcMain.handle("permissions:openAutomation", () => openAutomationSettings());
+ipcMain.handle("permissions:openAccessibility", () => openAccessibilitySettings());
 ipcMain.handle("status:get", () => getStatusPayload());
 ipcMain.handle("loginItem:get", () => app.getLoginItemSettings().openAtLogin);
 ipcMain.handle("loginItem:set", (_event, enabled) => {
