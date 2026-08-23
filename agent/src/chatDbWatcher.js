@@ -67,12 +67,19 @@ function watchChatDb(onInboundMessage, onError) {
   return () => clearInterval(timer);
 }
 
+// Returns 0 (rather than throwing) if chat.db can't be opened -- typically
+// means Full Disk Access isn't actually granted, even if the file exists on
+// disk (fs.existsSync can return true while SQLite still gets SQLITE_CANTOPEN
+// from TCC). Callers treat 0 as "outbound delivery-status watching isn't
+// available right now," not as a reason to fail the send itself.
 function getMaxMessageRowId() {
   let db;
   try {
     db = openReadOnly();
     if (!db) return 0;
     return db.prepare("SELECT MAX(ROWID) as maxId FROM message").get()?.maxId || 0;
+  } catch {
+    return 0;
   } finally {
     db?.close();
   }
@@ -164,6 +171,8 @@ function watchOutboundStatus({ contactHandle, body, baselineRowId }, onResolved)
       }
       const row = db.prepare("SELECT is_delivered, error FROM message WHERE ROWID = ?").get(targetRowId);
       if (row) checkStatus({ rowid: targetRowId, ...row });
+    } catch {
+      statusTimer = setTimeout(pollStatus, OUTBOUND_STATUS_POLL_MS);
     } finally {
       db?.close();
     }
