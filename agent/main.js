@@ -5,7 +5,7 @@ const keytar = require("keytar");
 
 const { AgentSocket } = require("./src/wsClient");
 const { sendIMessage, sendIMessageAttachment, startFaceTime, watchFaceTimeCall } = require("./src/messagesBridge");
-const { watchChatDb } = require("./src/chatDbWatcher");
+const { watchChatDb, getMaxMessageRowId, watchOutboundStatus } = require("./src/chatDbWatcher");
 const {
   checkPermissions,
   openFullDiskAccessSettings,
@@ -41,7 +41,15 @@ app.dock?.hide();
 
 // Runs unattended on a Mac mini in a rack — it needs to come back up on its
 // own after a reboot or crash, not wait for someone to notice and relaunch it.
-app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+// Only meaningful for a real installed .app; macOS refuses this (and logs an
+// error) when running unpackaged via `electron .` / `npm start`.
+if (app.isPackaged) {
+  try {
+    app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+  } catch (err) {
+    console.error("could not set login item:", err.message);
+  }
+}
 
 function createLoginWindow() {
   loginWindow = new BrowserWindow({
@@ -163,14 +171,40 @@ function startAgent(token, device) {
       pushStatus();
     },
     onSendMessage: async (msg) => {
+      const baselineRowId = getMaxMessageRowId();
       try {
         if (msg.mediaUrl) {
           await sendIMessageAttachment(msg.to, msg.mediaUrl);
         } else {
           await sendIMessage(msg.to, msg.body);
         }
+        // "SENT" here only means the AppleScript call to Messages.app didn't
+        // error -- not that the message was actually delivered. Messages.app
+        // queues sends locally and returns immediately either way. Real
+        // delivery/failure status shows up asynchronously in chat.db, so we
+        // watch for it and send a corrected status_update if it resolves.
         socket.send({ type: "status_update", messageId: msg.messageId, status: "SENT" });
         logTraffic({ direction: "out", kind: "imessage", contact: msg.to, body: msg.body, status: "sent" });
+
+        if (!msg.mediaUrl && msg.body) {
+          watchOutboundStatus({ contactHandle: msg.to, body: msg.body, baselineRowId }, (resolved) => {
+            socket.send({
+              type: "status_update",
+              messageId: msg.messageId,
+              status: resolved.status,
+              error: resolved.status === "FAILED" ? `chat.db error code ${resolved.errorCode}` : null,
+            });
+            if (resolved.status === "FAILED") {
+              logTraffic({
+                direction: "out",
+                kind: "imessage",
+                contact: msg.to,
+                body: `[delivery failed: error ${resolved.errorCode}]`,
+                status: "failed",
+              });
+            }
+          });
+        }
       } catch (err) {
         socket.send({
           type: "status_update",
@@ -248,9 +282,14 @@ ipcMain.handle("permissions:openFullDiskAccess", () => openFullDiskAccessSetting
 ipcMain.handle("permissions:openAutomation", () => openAutomationSettings());
 ipcMain.handle("permissions:openAccessibility", () => openAccessibilitySettings());
 ipcMain.handle("status:get", () => getStatusPayload());
-ipcMain.handle("loginItem:get", () => app.getLoginItemSettings().openAtLogin);
+ipcMain.handle("loginItem:get", () => (app.isPackaged ? app.getLoginItemSettings().openAtLogin : false));
 ipcMain.handle("loginItem:set", (_event, enabled) => {
-  app.setLoginItemSettings({ openAtLogin: enabled, openAsHidden: enabled });
+  if (!app.isPackaged) return; // not meaningful for an unpackaged dev run
+  try {
+    app.setLoginItemSettings({ openAtLogin: enabled, openAsHidden: enabled });
+  } catch (err) {
+    console.error("could not set login item:", err.message);
+  }
 });
 
 ipcMain.handle("auth:login", async (_event, { username, password }) => {

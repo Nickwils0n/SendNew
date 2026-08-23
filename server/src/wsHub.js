@@ -1,7 +1,11 @@
 const { WebSocketServer } = require("ws");
 const { verifyDeviceToken } = require("./auth");
 const { prisma } = require("./db");
-const { deliverInboundToWebhook, deliverFacetimeStatusToWebhook } = require("./webhooks");
+const {
+  deliverInboundToWebhook,
+  deliverFacetimeStatusToWebhook,
+  deliverMessageStatusToWebhook,
+} = require("./webhooks");
 
 // deviceId -> ws connection
 const connections = new Map();
@@ -117,9 +121,12 @@ async function handleAgentMessage(deviceId, msg) {
     case "status_update": {
       // agent reporting delivery/read status for a message it sent
       if (!msg.messageId || !msg.status) return;
-      await prisma.message
+      const updated = await prisma.message
         .update({ where: { id: msg.messageId }, data: { status: msg.status, error: msg.error || null } })
-        .catch(() => {});
+        .catch(() => null);
+      if (updated && device.companyId) {
+        await deliverMessageStatusToWebhook(device.companyId, updated);
+      }
       break;
     }
     case "facetime_status": {

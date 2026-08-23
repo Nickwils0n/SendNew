@@ -55,4 +55,26 @@ async function deliverFacetimeStatusToWebhook(companyId, message, raw, error) {
   });
 }
 
-module.exports = { deliverInboundToWebhook, deliverFacetimeStatusToWebhook, signPayload };
+// Fires every time an outbound message's status changes -- the initial
+// optimistic SENT (AppleScript call succeeded, not proof of delivery) and,
+// if the agent's chat.db watcher resolves it, a later corrected DELIVERED
+// or FAILED. Without this, the CRM has no way to learn about a status change
+// after its initial 202 response.
+async function deliverMessageStatusToWebhook(companyId, message) {
+  await deliverToCompanyWebhook(companyId, {
+    event: "message.status",
+    messageId: message.id,
+    conversationId: message.conversationId,
+    kind: message.kind,
+    status: message.status,
+    error: message.error || null,
+    updatedAt: message.updatedAt,
+  });
+}
+
+module.exports = {
+  deliverInboundToWebhook,
+  deliverFacetimeStatusToWebhook,
+  deliverMessageStatusToWebhook,
+  signPayload,
+};

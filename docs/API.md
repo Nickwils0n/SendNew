@@ -51,7 +51,33 @@ Your website should treat this the way it'd treat any inbound-message
 webhook: upsert the conversation, append the message, push to the open UI via
 your own websocket/polling.
 
-A second event fires zero or more times per FaceTime call, whenever the
+A second event fires every time an **outbound** message's status changes —
+including the transition from the initial `202` response's implicit `QUEUED`
+to `SENT`, and, if the agent's `chat.db` watcher resolves it, a later
+correction to `DELIVERED` or `FAILED`:
+
+```json
+{
+  "event": "message.status",
+  "messageId": "...",
+  "conversationId": "...",
+  "kind": "IMESSAGE",
+  "status": "FAILED",
+  "error": "chat.db error code 22",
+  "updatedAt": "..."
+}
+```
+
+**This is the piece to build against if your UI shows a message as "sent"
+immediately and never updates it.** `SENT` only means the agent successfully
+handed the message to Messages.app — not that it was delivered. A real
+`DELIVERED` or `FAILED` correction, when Apple reports one, can arrive up to
+~30 seconds after the initial `SENT` event, as its own separate webhook call
+with the same `messageId`. Some sends (SMS, or iMessage to certain numbers)
+never get a delivery receipt from Apple at all — no second event is not an
+error, it just means `SENT` is the final known state.
+
+A third event fires zero or more times per FaceTime call, whenever the
 agent's window-title watcher observes a change:
 
 ```json
