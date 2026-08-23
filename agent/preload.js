@@ -11,4 +11,9 @@ contextBridge.exposeInMainWorld("sendnew", {
     ipcRenderer.on("status:update", handler);
     return () => ipcRenderer.removeListener("status:update", handler);
   },
+  onTraffic: (callback) => {
+    const handler = (_event, entry) => callback(entry);
+    ipcRenderer.on("status:traffic", handler);
+    return () => ipcRenderer.removeListener("status:traffic", handler);
+  },
 });

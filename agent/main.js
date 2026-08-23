@@ -12,6 +12,7 @@ const pkg = require("./package.json");
 
 const KEYTAR_SERVICE = "com.sendnew.agent";
 const KEYTAR_ACCOUNT = "device-token";
+const MAX_TRAFFIC_ENTRIES = 100;
 // sendNewServerUrl is baked in at build time (see .github/workflows/build-dmg.yml,
 // electron-builder --config.extraMetadata.sendNewServerUrl=...) so packaged
 // DMG installs need zero manual configuration. Falls back to .env for local dev.
@@ -28,9 +29,14 @@ const state = {
   connected: false,
   device: null,
   lastError: null,
+  traffic: [], // newest first
 };
 
 app.dock?.hide();
+
+// Runs unattended on a Mac mini in a rack — it needs to come back up on its
+// own after a reboot or crash, not wait for someone to notice and relaunch it.
+app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
 
 function createLoginWindow() {
   loginWindow = new BrowserWindow({
@@ -52,8 +58,8 @@ function createStatusWindow() {
     return;
   }
   statusWindow = new BrowserWindow({
-    width: 380,
-    height: 420,
+    width: 420,
+    height: 560,
     resizable: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -77,7 +83,26 @@ function getStatusPayload() {
     device: state.device,
     lastError: state.lastError,
     permissions: checkPermissions(),
+    traffic: state.traffic,
   };
+}
+
+// direction: "in" | "out". kind: "imessage" | "facetime_audio" | "facetime_video".
+function logTraffic({ direction, kind, contact, body, status, error }) {
+  const entry = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: new Date().toISOString(),
+    direction,
+    kind,
+    contact,
+    body: body || null,
+    status, // "sent" | "failed" | "received"
+    error: error || null,
+  };
+  state.traffic.unshift(entry);
+  if (state.traffic.length > MAX_TRAFFIC_ENTRIES) state.traffic.length = MAX_TRAFFIC_ENTRIES;
+  statusWindow?.webContents.send("status:traffic", entry);
+  return entry;
 }
 
 function createTray() {
@@ -113,6 +138,7 @@ async function signOut() {
   statusWindow?.close();
   state.connected = false;
   state.device = null;
+  state.traffic = [];
   createLoginWindow();
 }
 
@@ -139,6 +165,7 @@ function startAgent(token, device) {
           await sendIMessage(msg.to, msg.body);
         }
         socket.send({ type: "status_update", messageId: msg.messageId, status: "SENT" });
+        logTraffic({ direction: "out", kind: "imessage", contact: msg.to, body: msg.body, status: "sent" });
       } catch (err) {
         socket.send({
           type: "status_update",
@@ -147,17 +174,38 @@ function startAgent(token, device) {
           error: err.message,
         });
         socket.send({ type: "log", level: "error", message: `send failed: ${err.message}` });
+        logTraffic({
+          direction: "out",
+          kind: "imessage",
+          contact: msg.to,
+          body: msg.body,
+          status: "failed",
+          error: err.message,
+        });
       }
     },
     onStartFacetime: async (msg) => {
       try {
         await startFaceTime(msg.to, msg.video);
         socket.send({ type: "status_update", messageId: msg.messageId, status: "SENT" });
+        logTraffic({
+          direction: "out",
+          kind: msg.video ? "facetime_video" : "facetime_audio",
+          contact: msg.to,
+          status: "sent",
+        });
       } catch (err) {
         socket.send({
           type: "status_update",
           messageId: msg.messageId,
           status: "FAILED",
+          error: err.message,
+        });
+        logTraffic({
+          direction: "out",
+          kind: msg.video ? "facetime_video" : "facetime_audio",
+          contact: msg.to,
+          status: "failed",
           error: err.message,
         });
       }
@@ -166,7 +214,10 @@ function startAgent(token, device) {
   socket.connect();
 
   stopChatWatcher = watchChatDb(
-    (inbound) => socket.send({ type: "inbound_message", ...inbound }),
+    (inbound) => {
+      socket.send({ type: "inbound_message", ...inbound });
+      logTraffic({ direction: "in", kind: "imessage", contact: inbound.from, body: inbound.body, status: "received" });
+    },
     (err) => {
       state.lastError = `chat.db read failed: ${err.message}`;
       socket.send({ type: "log", level: "error", message: state.lastError });
