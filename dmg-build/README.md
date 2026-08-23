@@ -32,9 +32,13 @@ npm start
 ```
 
 `npm start` (see `package.json`) automatically picks up `.electron-dist/` if
-it exists and points Electron at it via `ELECTRON_OVERRIDE_DIST_PATH`, instead
-of relying on Electron's built-in downloader. `.electron-dist/` is gitignored
-— repeat this on each machine that hits the same failure; most won't need it.
+it exists: it writes `node_modules/electron/path.txt` (the relative path to
+the executable inside the `.app` bundle, `Electron.app/Contents/MacOS/Electron`
+on macOS — required because a manual unzip doesn't create this file the way
+Electron's own installer would) and points Electron at the folder via
+`ELECTRON_OVERRIDE_DIST_PATH`, instead of relying on Electron's built-in
+downloader. `.electron-dist/` is gitignored — repeat this on each machine that
+hits the same failure; most won't need it.
 
 ## 2. Per-device credentials
 
