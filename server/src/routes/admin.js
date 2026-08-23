@@ -1,4 +1,5 @@
 const express = require("express");
+const { nanoid } = require("nanoid");
 const { prisma } = require("../db");
 const { hashPassword, requireAdminSecret } = require("../auth");
 
@@ -16,6 +17,38 @@ router.post("/companies", async (req, res) => {
 router.get("/companies", async (_req, res) => {
   const companies = await prisma.company.findMany({ orderBy: { createdAt: "desc" } });
   res.json(companies);
+});
+
+router.get("/companies/:id", async (req, res) => {
+  const company = await prisma.company.findUnique({
+    where: { id: req.params.id },
+    include: { devices: { select: { id: true, label: true, phoneNumber: true, online: true, status: true } } },
+  });
+  if (!company) return res.status(404).json({ error: "not found" });
+  res.json(company);
+});
+
+// Called by your CRM website's backend (never the browser directly — this
+// route is admin-secret gated) when a company clicks "regenerate API key" in
+// the Send New connections panel.
+router.post("/companies/:id/regenerate-key", async (req, res) => {
+  const company = await prisma.company.update({
+    where: { id: req.params.id },
+    data: { apiKey: `sk_${nanoid(32)}` },
+  });
+  res.json({ apiKey: company.apiKey });
+});
+
+router.patch("/companies/:id", async (req, res) => {
+  const { webhookUrl, name } = req.body;
+  const company = await prisma.company.update({
+    where: { id: req.params.id },
+    data: {
+      ...(webhookUrl !== undefined ? { webhookUrl } : {}),
+      ...(name !== undefined ? { name } : {}),
+    },
+  });
+  res.json(company);
 });
 
 // Provision credentials for a Mac mini. Give the returned username/password

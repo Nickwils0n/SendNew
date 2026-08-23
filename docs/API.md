@@ -15,6 +15,25 @@ provisioning tooling, not the public website.
   connected.
 - `POST /api/facetime` `{ deviceId, to, video? }` — start a FaceTime call.
 
+## Admin (your CRM website's backend → server, `x-admin-secret`)
+
+These exist so your CRM's backend can build a self-serve "Send New"
+connections panel for each company, without you manually running curl for
+every signup:
+
+- `GET /admin/companies/:id` — company details + its assigned devices
+  (`label`, `phoneNumber`, `online`, `status`). Use this to render "assigned
+  phone number and iCloud" status.
+- `POST /admin/companies/:id/regenerate-key` — rotates and returns a new
+  `apiKey`. Wire this to a "Regenerate API key" button; the old key stops
+  working immediately.
+- `PATCH /admin/companies/:id` `{ name?, webhookUrl? }`.
+
+**Keep `ADMIN_SECRET` server-side only** in wayne-crm (an env var on its own
+backend) — never ship it to the browser. The company's own dashboard talks to
+wayne-crm's *own* backend routes, which then call these admin endpoints on
+`server/` using that secret.
+
 ## Server → website (webhook)
 
 POSTed to `Company.webhookUrl` whenever an agent reports an inbound message:
