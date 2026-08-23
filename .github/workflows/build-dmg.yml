@@ -1,0 +1,47 @@
+name: Build SendNew Agent DMG
+
+on:
+  push:
+    tags:
+      - "agent-v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned LTS avoids the very-new-Node native-module/install-script quirks
+      # this project hit during local setup — GitHub's runner otherwise doesn't
+      # have any of the environment-specific issues we debugged by hand.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies (rebuilds native modules for Electron automatically)
+        run: npm install
+
+      - name: Build unsigned DMG
+        env:
+          # No Apple Developer ID yet — build unsigned. Users do a one-time
+          # right-click > Open on first launch to bypass Gatekeeper; see
+          # dmg-build/README.md. Flip this pipeline to a signing one later by
+          # adding CSC_LINK/CSC_KEY_PASSWORD/APPLE_ID secrets and removing
+          # `identity: null` from agent/package.json's build.mac config.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          npx electron-builder --mac dmg \
+            --config.extraMetadata.sendNewServerUrl="${{ secrets.SENDNEW_SERVER_URL }}"
+
+      - name: Upload DMG to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: agent/dist/*.dmg
+          generate_release_notes: true

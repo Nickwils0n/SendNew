@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>SendNew Agent — Status</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #1c1c1e;
+    color: #f2f2f7;
+    margin: 0;
+    padding: 20px;
+    font-size: 13px;
+  }
+  h1 { font-size: 15px; margin: 0 0 16px; }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #2c2c2e;
+    gap: 10px;
+  }
+  .row:last-child { border-bottom: none; }
+  .label { color: #a1a1a6; }
+  .value { text-align: right; }
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+  .dot.ok { background: #30d158; }
+  .dot.bad { background: #ff453a; }
+  .dot.unknown { background: #ffd60a; }
+  button {
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: none;
+    background: #0a84ff;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #error {
+    margin-top: 12px;
+    padding: 10px;
+    background: #3a1a1a;
+    border-radius: 6px;
+    color: #ff8a80;
+    font-size: 12px;
+    display: none;
+  }
+  .server-url {
+    font-size: 11px;
+    color: #6e6e73;
+    word-break: break-all;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+  <h1>SendNew Agent</h1>
+
+  <div class="row">
+    <span class="label">Connection</span>
+    <span class="value"><span class="dot unknown" id="connDot"></span><span id="connText">Checking…</span></span>
+  </div>
+  <div class="row">
+    <span class="label">Device</span>
+    <span class="value" id="deviceText">—</span>
+  </div>
+  <div class="row">
+    <span class="label">Full Disk Access</span>
+    <span class="value">
+      <span class="dot unknown" id="fdaDot"></span><span id="fdaText">Checking…</span>
+    </span>
+  </div>
+  <div class="row" id="fdaRow" style="display:none">
+    <span class="label" style="font-size:11px">Needed to read incoming messages</span>
+    <button id="fdaBtn">Open Settings</button>
+  </div>
+  <div class="row">
+    <span class="label">Automation</span>
+    <span class="value"><span id="autoText" style="color:#a1a1a6">Grant when macOS prompts you</span></span>
+  </div>
+  <div class="row">
+    <span class="label" style="font-size:11px">If sending ever silently fails</span>
+    <button id="autoBtn">Open Settings</button>
+  </div>
+
+  <div id="error"></div>
+  <div class="server-url" id="serverUrl"></div>
+
+  <script>
+    const connDot = document.getElementById("connDot");
+    const connText = document.getElementById("connText");
+    const deviceText = document.getElementById("deviceText");
+    const fdaDot = document.getElementById("fdaDot");
+    const fdaText = document.getElementById("fdaText");
+    const fdaRow = document.getElementById("fdaRow");
+    const errorEl = document.getElementById("error");
+    const serverUrlEl = document.getElementById("serverUrl");
+
+    function render(status) {
+      connDot.className = "dot " + (status.connected ? "ok" : "bad");
+      connText.textContent = status.connected ? "Connected" : "Disconnected — retrying…";
+
+      deviceText.textContent = status.device
+        ? (status.device.label || status.device.username)
+        : "Not signed in";
+
+      const hasFda = status.permissions?.fullDiskAccess;
+      fdaDot.className = "dot " + (hasFda ? "ok" : "bad");
+      fdaText.textContent = hasFda ? "Granted" : "Not granted";
+      fdaRow.style.display = hasFda ? "none" : "flex";
+
+      if (status.lastError) {
+        errorEl.textContent = status.lastError;
+        errorEl.style.display = "block";
+      } else {
+        errorEl.style.display = "none";
+      }
+
+      serverUrlEl.textContent = "Server: " + status.serverUrl;
+    }
+
+    window.sendnew.getStatus().then(render);
+    window.sendnew.onStatusUpdate(render);
+
+    document.getElementById("fdaBtn").addEventListener("click", () => {
+      window.sendnew.openFullDiskAccessSettings();
+    });
+    document.getElementById("autoBtn").addEventListener("click", () => {
+      window.sendnew.openAutomationSettings();
+    });
+
+    // Full Disk Access requires an app restart to take effect after granting —
+    // re-check periodically so the dot updates without the user hunting for it.
+    setInterval(() => window.sendnew.getStatus().then(render), 5000);
+  </script>
+</body>
+</html>

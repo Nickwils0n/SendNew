@@ -1,20 +1,67 @@
 # Building & deploying the DMG
 
-## 1. Build the app
+## The easy path: GitHub Releases (recommended)
+
+The DMG is built automatically by `.github/workflows/build-dmg.yml` on a
+clean macOS GitHub Actions runner — no npm/Node/Electron setup needed on your
+own machine at all, and it sidesteps every local quirk this project hit
+during initial setup (native module ABI mismatches, Electron's installer
+silently failing, npm's script-approval gating).
+
+### One-time setup
+
+1. In the repo's GitHub Settings → Secrets and variables → Actions, add a
+   repository secret named `SENDNEW_SERVER_URL` set to your Railway server's
+   URL (e.g. `https://sendnew-production.up.railway.app`). This gets baked
+   into every build, so installed apps need **zero configuration** — no
+   `.env` file, nothing to type beyond the device username/password.
+
+### Cutting a release
+
+```bash
+git tag agent-v1.0.0
+git push origin agent-v1.0.0
+```
+
+Pushing a tag matching `agent-v*` triggers the workflow. You can also trigger
+it manually from the Actions tab (Run workflow) without a tag, which builds
+from whatever's on the branch. Either way it publishes a GitHub Release with
+the `.dmg` attached.
+
+### Installing on a Mac mini
+
+```bash
+curl -L -o SendNew.dmg "https://github.com/Nickwils0n/SendNew/releases/latest/download/SendNew Agent-1.0.0.dmg"
+open SendNew.dmg
+```
+
+(Or just download it from the Releases page in a browser.) Drag the app into
+Applications.
+
+**First launch only** — this build isn't code-signed (no Apple Developer ID
+yet), so macOS Gatekeeper blocks a plain double-click the first time:
+
+1. In Finder, **right-click** (or Control-click) `SendNew Agent.app` in
+   Applications — do **not** double-click it.
+2. Choose **Open** from the menu.
+3. Click **Open** again in the warning dialog that appears.
+
+After that one-time step, the app opens normally forever, including via
+double-click or Login Items. This is a one-time step *per Mac mini*, not
+per launch.
+
+Once you have an Apple Developer ID ($99/year), tell me and I'll wire up
+signing + notarization in the workflow — after that, this right-click step
+goes away entirely for every future install.
+
+## Local build (fallback, only if you can't use Actions)
 
 ```bash
 cd agent
 npm install
-# point the built app at your Railway server before packaging:
 echo "SENDNEW_SERVER_URL=https://<your-app>.up.railway.app" > .env
 npm run dist
 ```
-
-`electron-builder` outputs `dist/SendNew Agent-<version>.dmg`. You'll want a
-paid Apple Developer ID to code-sign + notarize it (`electron-builder` handles
-this automatically if `CSC_LINK`/`CSC_KEY_PASSWORD` and
-`APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/`APPLE_TEAM_ID` env vars are set) —
-unsigned/un-notarized builds will be blocked by Gatekeeper on every Mac mini.
 
 **If `npm install`/`npm start` fails with "Electron failed to install
 correctly"**: on some Mac/Node combinations, the JS-based zip extractor that
@@ -40,7 +87,13 @@ Electron's own installer would) and points Electron at the folder via
 downloader. `.electron-dist/` is gitignored — repeat this on each machine that
 hits the same failure; most won't need it.
 
-## 2. Per-device credentials
+**If it crashes with SIGSEGV on launch**: your native modules
+(`better-sqlite3`, `keytar`) were built against your system Node's ABI
+instead of Electron's. `npm install` runs `electron-rebuild` automatically
+via its `postinstall` script to fix this — if you still hit it, run
+`npx electron-rebuild -f -w better-sqlite3,keytar` by hand and retry.
+
+## Per-device credentials
 
 Each Mac mini needs its own username/password from the server (see
 `server/README.md` → "provision your first company + device"). Two ways to
@@ -55,7 +108,7 @@ hand it to a machine:
   skips the login screen entirely. Ask if you want this wired up; it's a
   small addition to `main.js`.
 
-## 3. Permissions at scale (the actual point of friction)
+## Permissions at scale (the actual point of friction)
 
 A `.dmg` cannot click "Allow" on the Automation / Full Disk Access prompts —
 Apple blocks that categorically, for any installer. For a fleet you
@@ -75,13 +128,19 @@ administer, the fix is:
    something any profile can pre-skip.
 
 Without an MDM, plan on physically clicking "Allow" once per Mac mini the
-first time each prompt appears — after that it persists across reboots.
+first time each prompt appears — after that it persists across reboots. The
+app's tray icon → **Show Status…** window shows live permission status with
+buttons that jump straight to the right System Settings pane.
 
-## 4. Rollout checklist per Mac mini
+## Rollout checklist per Mac mini
 
 - [ ] Signed into the right iCloud account / iMessage-registered number
-- [ ] SendNew Agent installed from the DMG (or MDM-pushed .pkg later)
-- [ ] PPPC profile applied (Full Disk Access + Automation)
+- [ ] SendNew Agent downloaded from the latest GitHub Release and installed
+      (one-time right-click → Open, see above)
+- [ ] PPPC profile applied (Full Disk Access + Automation), or granted
+      manually on first prompt
 - [ ] Logged into the agent with its device credentials
+- [ ] Tray icon → Show Status… shows "Connected" and Full Disk Access
+      "Granted"
 - [ ] Device shows `online: true` via `GET /admin/devices` and is assigned to
       the right company

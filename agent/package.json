@@ -4,6 +4,7 @@
   "private": true,
   "description": "Menu-bar agent that connects a Mac mini to the SendNew server and drives Messages.app/FaceTime.",
   "main": "main.js",
+  "sendNewServerUrl": "",
   "scripts": {
     "postinstall": "electron-rebuild -f -w better-sqlite3,keytar",
     "start": "if [ -d .electron-dist ]; then printf 'Electron.app/Contents/MacOS/Electron' > node_modules/electron/path.txt; ELECTRON_OVERRIDE_DIST_PATH=\"$(pwd)/.electron-dist\" electron .; else electron .; fi",
@@ -26,6 +27,7 @@
     "mac": {
       "category": "public.app-category.business",
       "target": ["dmg"],
+      "identity": null,
       "hardenedRuntime": true,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
@@ -37,6 +39,6 @@
     "dmg": {
       "title": "Install SendNew Agent"
     },
-    "files": ["main.js", "preload.js", "login.html", "src/**/*", "scripts/**/*"]
+    "files": ["main.js", "preload.js", "login.html", "status.html", "src/**/*", "scripts/**/*"]
   }
 }
