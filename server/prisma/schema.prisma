@@ -12,6 +12,7 @@ model Company {
   name          String
   apiKey        String         @unique @default(cuid())
   webhookUrl    String?
+  webhookSecret String         @unique @default(cuid())
   devices       Device[]
   conversations Conversation[]
   createdAt     DateTime       @default(now())

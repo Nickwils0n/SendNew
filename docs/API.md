@@ -51,6 +51,16 @@ Your website should treat this the way it'd treat any inbound-message
 webhook: upsert the conversation, append the message, push to the open UI via
 your own websocket/polling.
 
+**Verifying it's really from SendNew:** every delivery carries an
+`x-sendnew-signature: sha256=<hex>` header, computed as
+`HMAC-SHA256(rawRequestBody, company.webhookSecret)`. `webhookSecret` is
+returned alongside `apiKey` in `GET /admin/companies/:id` (admin-secret gated
+— fetch and store it server-side the same way you store `apiKey`, never
+expose it to the browser). Your receiver must recompute the HMAC over the
+*raw, unparsed* body and compare with a constant-time check
+(`crypto.timingSafeEqual` in Node) before trusting the payload — reject
+anything that doesn't match or is missing the header.
+
 ## Agent (Mac mini) ↔ server
 
 - `POST /agent/login` `{ username, password }` → `{ token, device }`. The
