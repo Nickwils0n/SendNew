@@ -16,6 +16,26 @@ this automatically if `CSC_LINK`/`CSC_KEY_PASSWORD` and
 `APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/`APPLE_TEAM_ID` env vars are set) —
 unsigned/un-notarized builds will be blocked by Gatekeeper on every Mac mini.
 
+**If `npm install`/`npm start` fails with "Electron failed to install
+correctly"**: on some Mac/Node combinations, the JS-based zip extractor that
+Electron's own installer uses internally fails silently partway through
+unpacking `Electron.app` (exits 0, but only a couple of stray files land in
+`node_modules/electron/dist/` — no error). The system `unzip` command doesn't
+have this problem. Workaround:
+
+```bash
+cd agent
+curl -L -o /tmp/electron.zip "https://github.com/electron/electron/releases/download/v31.3.0/electron-v31.3.0-darwin-x64.zip"
+mkdir -p .electron-dist
+unzip /tmp/electron.zip -d .electron-dist
+npm start
+```
+
+`npm start` (see `package.json`) automatically picks up `.electron-dist/` if
+it exists and points Electron at it via `ELECTRON_OVERRIDE_DIST_PATH`, instead
+of relying on Electron's built-in downloader. `.electron-dist/` is gitignored
+— repeat this on each machine that hits the same failure; most won't need it.
+
 ## 2. Per-device credentials
 
 Each Mac mini needs its own username/password from the server (see

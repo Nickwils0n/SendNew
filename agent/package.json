@@ -5,7 +5,7 @@
   "description": "Menu-bar agent that connects a Mac mini to the SendNew server and drives Messages.app/FaceTime.",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "if [ -d .electron-dist ]; then ELECTRON_OVERRIDE_DIST_PATH=\"$(pwd)/.electron-dist\" electron .; else electron .; fi",
     "dist": "electron-builder --mac dmg"
   },
   "dependencies": {

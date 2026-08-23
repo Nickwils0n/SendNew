@@ -1,5 +1,6 @@
 node_modules/
 dist/
+agent/.electron-dist/
 .env
 .env.*
 !.env.example
