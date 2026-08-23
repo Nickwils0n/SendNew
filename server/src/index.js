@@ -1,5 +1,17 @@
 require("dotenv").config();
 const http = require("http");
+
+// Last line of defense: Node terminates the whole process on an unhandled
+// promise rejection by default (since v15). Every route/ws handler already
+// catches its own errors, but this stops one missed spot from taking down
+// every other connected company/device.
+process.on("unhandledRejection", (err) => {
+  console.error("unhandled rejection:", err);
+});
+process.on("uncaughtException", (err) => {
+  console.error("uncaught exception:", err);
+});
+
 const express = require("express");
 const cors = require("cors");
 

@@ -31,12 +31,16 @@ async function verifyPassword(password, hash) {
 
 // Express middleware: authenticate the existing CRM website via company API key.
 async function requireCompanyApiKey(req, res, next) {
-  const apiKey = req.header("x-api-key");
-  if (!apiKey) return res.status(401).json({ error: "missing x-api-key header" });
-  const company = await prisma.company.findUnique({ where: { apiKey } });
-  if (!company) return res.status(401).json({ error: "invalid api key" });
-  req.company = company;
-  next();
+  try {
+    const apiKey = req.header("x-api-key");
+    if (!apiKey) return res.status(401).json({ error: "missing x-api-key header" });
+    const company = await prisma.company.findUnique({ where: { apiKey } });
+    if (!company) return res.status(401).json({ error: "invalid api key" });
+    req.company = company;
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 // Express middleware: authenticate an admin operation (you, provisioning devices/companies).

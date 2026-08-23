@@ -32,17 +32,23 @@ function attachWsServer(httpServer) {
       return;
     }
 
-    const device = await prisma.device.findUnique({ where: { id: deviceId } });
-    if (!device) {
-      ws.close(4004, "unknown device");
+    try {
+      const device = await prisma.device.findUnique({ where: { id: deviceId } });
+      if (!device) {
+        ws.close(4004, "unknown device");
+        return;
+      }
+
+      connections.set(deviceId, ws);
+      await prisma.device.update({
+        where: { id: deviceId },
+        data: { online: true, lastSeenAt: new Date() },
+      });
+    } catch (err) {
+      console.error(`ws connection setup failed for device ${deviceId}:`, err.message);
+      ws.close(1011, "internal error");
       return;
     }
-
-    connections.set(deviceId, ws);
-    await prisma.device.update({
-      where: { id: deviceId },
-      data: { online: true, lastSeenAt: new Date() },
-    });
 
     ws.on("message", async (raw) => {
       let msg;
@@ -51,7 +57,11 @@ function attachWsServer(httpServer) {
       } catch {
         return;
       }
-      await handleAgentMessage(deviceId, msg);
+      try {
+        await handleAgentMessage(deviceId, msg);
+      } catch (err) {
+        console.error(`ws message handling failed for device ${deviceId}:`, err.message);
+      }
     });
 
     ws.on("close", async () => {

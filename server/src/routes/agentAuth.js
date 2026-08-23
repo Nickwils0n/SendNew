@@ -1,12 +1,13 @@
 const express = require("express");
 const { prisma } = require("../db");
 const { verifyPassword, signDeviceToken } = require("../auth");
+const { asyncHandler } = require("../asyncHandler");
 
 const router = express.Router();
 
 // Called by the agent app (inside the DMG) on first launch, or whenever it
 // needs a fresh token. This is the "user/password prompt" the DMG shows.
-router.post("/login", async (req, res) => {
+router.post("/login", asyncHandler(async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: "username and password are required" });
@@ -28,6 +29,6 @@ router.post("/login", async (req, res) => {
       status: device.status,
     },
   });
-});
+}));
 
 module.exports = router;
