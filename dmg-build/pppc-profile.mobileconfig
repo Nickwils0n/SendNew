@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PPPC (Privacy Preferences Policy Control) profile template.
+
+  Push this via your MDM (Jamf, Kandji, Mosyle, SimpleMDM, or Apple's own
+  Apple Business Manager + a free MDM) to every Mac mini in the cluster. It
+  silently pre-authorizes the SendNew Agent app for:
+    - SystemPolicyAllFiles   (Full Disk Access, to read ~/Library/Messages/chat.db)
+    - AppleEvents            (Automation, to drive Messages.app via AppleScript)
+
+  This is the only supported way to skip the manual click-through prompts —
+  no installer/DMG can grant these on its own. You MUST fill in:
+    - PayloadIdentifier / PayloadUUID: generate fresh UUIDs per deployment
+    - CodeRequirement: the actual code-signing requirement string for your
+      signed+notarized build, e.g. via:
+        codesign -dr - /Applications/SendNew\ Agent.app
+    - Identifier: your app's bundle ID (com.sendnew.agent, matches package.json)
+-->
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadType</key>
+      <string>com.apple.TCC.configuration-profile-policy</string>
+      <key>PayloadIdentifier</key>
+      <string>com.sendnew.agent.pppc</string>
+      <key>PayloadUUID</key>
+      <string>REPLACE-WITH-GENERATED-UUID</string>
+      <key>PayloadDisplayName</key>
+      <string>SendNew Agent Privacy Preferences</string>
+      <key>PayloadEnabled</key>
+      <true/>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>Services</key>
+      <dict>
+        <key>SystemPolicyAllFiles</key>
+        <array>
+          <dict>
+            <key>Identifier</key>
+            <string>com.sendnew.agent</string>
+            <key>IdentifierType</key>
+            <string>bundleID</string>
+            <key>CodeRequirement</key>
+            <string>REPLACE-WITH-CODESIGN-REQUIREMENT</string>
+            <key>Authorization</key>
+            <string>Allow</string>
+          </dict>
+        </array>
+        <key>AppleEvents</key>
+        <array>
+          <dict>
+            <key>Identifier</key>
+            <string>com.sendnew.agent</string>
+            <key>IdentifierType</key>
+            <string>bundleID</string>
+            <key>CodeRequirement</key>
+            <string>REPLACE-WITH-CODESIGN-REQUIREMENT</string>
+            <key>AEReceiverIdentifier</key>
+            <string>com.apple.iChat</string>
+            <key>AEReceiverIdentifierType</key>
+            <string>bundleID</string>
+            <key>AEReceiverCodeRequirement</key>
+            <string>identifier "com.apple.iChat" and anchor apple</string>
+            <key>Authorization</key>
+            <string>Allow</string>
+          </dict>
+          <dict>
+            <key>Identifier</key>
+            <string>com.sendnew.agent</string>
+            <key>IdentifierType</key>
+            <string>bundleID</string>
+            <key>CodeRequirement</key>
+            <string>REPLACE-WITH-CODESIGN-REQUIREMENT</string>
+            <key>AEReceiverIdentifier</key>
+            <string>com.apple.systemevents</string>
+            <key>AEReceiverIdentifierType</key>
+            <string>bundleID</string>
+            <key>AEReceiverCodeRequirement</key>
+            <string>identifier "com.apple.systemevents" and anchor apple</string>
+            <key>Authorization</key>
+            <string>Allow</string>
+          </dict>
+        </array>
+      </dict>
+    </dict>
+  </array>
+  <key>PayloadDisplayName</key>
+  <string>SendNew Agent - Privacy Preferences</string>
+  <key>PayloadIdentifier</key>
+  <string>com.sendnew.agent.pppc.profile</string>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadUUID</key>
+  <string>REPLACE-WITH-GENERATED-UUID</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+</dict>
+</plist>

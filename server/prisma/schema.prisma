@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id            String         @id @default(cuid())
+  name          String
+  apiKey        String         @unique @default(cuid())
+  webhookUrl    String?
+  devices       Device[]
+  conversations Conversation[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+enum DeviceStatus {
+  UNASSIGNED
+  ASSIGNED
+  DISABLED
+}
+
+model Device {
+  id           String        @id @default(cuid())
+  // login identifier baked into the DMG / entered on first launch
+  username     String        @unique
+  passwordHash String
+  label        String? // e.g. "Mac mini #3 - rack A"
+  phoneNumber  String? // iMessage-registered number/Apple ID on this Mac
+  status       DeviceStatus  @default(UNASSIGNED)
+  company      Company?      @relation(fields: [companyId], references: [id])
+  companyId    String?
+  lastSeenAt   DateTime?
+  online       Boolean       @default(false)
+  conversations Conversation[]
+  messages     Message[]
+  logs         DeviceLog[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model DeviceLog {
+  id        String   @id @default(cuid())
+  device    Device   @relation(fields: [deviceId], references: [id])
+  deviceId  String
+  level     String   @default("info")
+  message   String
+  meta      Json?
+  createdAt DateTime @default(now())
+}
+
+model Conversation {
+  id            String    @id @default(cuid())
+  company       Company   @relation(fields: [companyId], references: [id])
+  companyId     String
+  device        Device    @relation(fields: [deviceId], references: [id])
+  deviceId      String
+  // the other party's phone number / email (iMessage handle)
+  contactHandle String
+  messages      Message[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([deviceId, contactHandle])
+}
+
+enum MessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  RECEIVED
+}
+
+enum MessageKind {
+  IMESSAGE
+  SMS
+  FACETIME_AUDIO
+  FACETIME_VIDEO
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversation    Conversation    @relation(fields: [conversationId], references: [id])
+  conversationId  String
+  device          Device          @relation(fields: [deviceId], references: [id])
+  deviceId        String
+  direction       MessageDirection
+  kind            MessageKind      @default(IMESSAGE)
+  body            String?
+  mediaUrl        String?
+  status          MessageStatus    @default(QUEUED)
+  externalId      String? // chat.db ROWID / GUID from Messages.app
+  error           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}

@@ -1,0 +1,39 @@
+{
+  "name": "sendnew-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Menu-bar agent that connects a Mac mini to the SendNew server and drives Messages.app/FaceTime.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac dmg"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "keytar": "^7.9.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^31.3.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.sendnew.agent",
+    "productName": "SendNew Agent",
+    "mac": {
+      "category": "public.app-category.business",
+      "target": ["dmg"],
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "SendNew Agent sends iMessages and starts FaceTime calls on your behalf via Messages.app and FaceTime.app.",
+        "LSUIElement": true
+      }
+    },
+    "dmg": {
+      "title": "Install SendNew Agent"
+    },
+    "files": ["main.js", "preload.js", "login.html", "src/**/*", "scripts/**/*"]
+  }
+}
