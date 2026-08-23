@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
     "keytar": "^7.9.0",
     "ws": "^8.18.0"
   },

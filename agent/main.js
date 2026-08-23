@@ -1,3 +1,4 @@
+require("dotenv").config();
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require("electron");
 const path = require("path");
 const keytar = require("keytar");
@@ -104,13 +105,18 @@ function startAgent(token) {
 ipcMain.handle("permissions:check", () => checkPermissions());
 
 ipcMain.handle("auth:login", async (_event, { username, password }) => {
-  const res = await fetch(`${SERVER_HTTP_URL}/agent/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
-  const data = await res.json();
-  if (!res.ok) return { error: data.error || "login failed" };
+  let res;
+  try {
+    res = await fetch(`${SERVER_HTTP_URL}/agent/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+  } catch (err) {
+    return { error: `Could not reach ${SERVER_HTTP_URL}: ${err.message}` };
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { error: data.error || `login failed (HTTP ${res.status})` };
 
   await keytar.setPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT, data.token);
   startAgent(data.token);
