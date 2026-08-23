@@ -51,10 +51,11 @@ Your website should treat this the way it'd treat any inbound-message
 webhook: upsert the conversation, append the message, push to the open UI via
 your own websocket/polling.
 
-A second event fires every time an **outbound** message's status changes —
-including the transition from the initial `202` response's implicit `QUEUED`
-to `SENT`, and, if the agent's `chat.db` watcher resolves it, a later
-correction to `DELIVERED` or `FAILED`:
+A second event fires every time an **outbound** message's status changes.
+There is no optimistic `SENT` — the initial `202` response's `QUEUED` stands
+until the agent's `chat.db` watcher actually *confirms* Messages.app created
+the outgoing row (usually within a couple seconds), which is when `SENT`
+fires. From there it may later correct to `DELIVERED` or `FAILED`:
 
 ```json
 {
@@ -68,14 +69,21 @@ correction to `DELIVERED` or `FAILED`:
 }
 ```
 
-**This is the piece to build against if your UI shows a message as "sent"
-immediately and never updates it.** `SENT` only means the agent successfully
-handed the message to Messages.app — not that it was delivered. A real
-`DELIVERED` or `FAILED` correction, when Apple reports one, can arrive up to
-~30 seconds after the initial `SENT` event, as its own separate webhook call
-with the same `messageId`. Some sends (SMS, or iMessage to certain numbers)
-never get a delivery receipt from Apple at all — no second event is not an
-error, it just means `SENT` is the final known state.
+**Build your UI against this, not an assumption that a `202` means sent.**
+A message can sit at `QUEUED` for a few seconds before `SENT` fires, and can
+go straight to `FAILED` without ever passing through `SENT` at all — e.g. if
+Messages.app never confirms creating the row (`error` will read "Messages.app
+never confirmed creating this message" in that case, distinct from a
+post-send delivery failure). A `DELIVERED`/`FAILED` correction after `SENT`
+can arrive up to ~30 seconds later, as its own separate webhook call with the
+same `messageId`. Some sends (SMS, or iMessage to certain numbers) never get
+a delivery receipt from Apple at all — no further event after `SENT` is not
+an error, it just means `SENT` is the final known state.
+
+One caveat: if the Mac mini's Full Disk Access permission isn't granted,
+none of this can be verified at all, and the message is left at whatever
+status it already had (typically `QUEUED` forever) rather than guessing.
+Check device status/permissions if a company's messages seem to hang.
 
 A third event fires zero or more times per FaceTime call, whenever the
 agent's window-title watcher observes a change:

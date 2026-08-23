@@ -5,8 +5,12 @@ const Database = require("better-sqlite3");
 
 const CHAT_DB_PATH = path.join(os.homedir(), "Library", "Messages", "chat.db");
 const POLL_INTERVAL_MS = 2000;
-const OUTBOUND_STATUS_POLL_MS = 2000;
-const OUTBOUND_STATUS_TIMEOUT_MS = 30000;
+const OUTBOUND_POLL_MS = 2000;
+// chat.db should show the outgoing row almost instantly if Messages.app
+// genuinely accepted the send -- this is deliberately much shorter than the
+// delivery-resolution window below.
+const CONFIRM_TIMEOUT_MS = 8000;
+const RESOLVE_TIMEOUT_MS = 30000;
 
 function openReadOnly() {
   if (!fs.existsSync(CHAT_DB_PATH)) return null;
@@ -85,28 +89,42 @@ function getMaxMessageRowId() {
   }
 }
 
-// After we tell Messages.app to send something, `send` returning without an
-// error only means the AppleScript call succeeded -- not that the message
-// was actually delivered. Real delivery/failure status lands asynchronously
-// in chat.db (is_delivered / error columns), which this polls for. Finds the
-// matching outbound row by contact + text + being newer than baselineRowId
-// (captured right before sending), then watches that specific row.
+// A successful AppleScript `send` call only means Messages.app accepted the
+// request -- it does not mean anything was actually sent. This watches
+// chat.db for real confirmation in two stages and reports each via onEvent:
 //
-// Calls onResolved({ status: "DELIVERED" | "FAILED", errorCode }) once, or
-// never at all if it can't find/resolve the row within the timeout -- in
-// that case the earlier optimistic SENT status stands, same as before this
-// existed. SMS and some iMessage sends legitimately never set is_delivered,
-// so "never resolves" is an expected outcome, not a bug.
-function watchOutboundStatus({ contactHandle, body, baselineRowId }, onResolved) {
+//   { type: "confirmed" }
+//     The outgoing row actually appeared in chat.db -- Messages.app truly
+//     created it. This is what "SENT" should mean, not "the command didn't
+//     throw." Fires almost immediately for a genuine send.
+//
+//   { type: "not_confirmed" }
+//     The row never appeared within CONFIRM_TIMEOUT_MS, and chat.db access
+//     itself is known to be working (fullDiskAccessAvailable) -- so the
+//     absence is a real signal, not a permissions gap. Treat as a failed
+//     send.
+//
+//   (nothing fires, ever)
+//     Either fullDiskAccessAvailable was false (we genuinely can't verify
+//     either way -- don't guess, leave the message at whatever status it
+//     already had), or the row was found and delivery/error never resolved
+//     within RESOLVE_TIMEOUT_MS (expected for SMS and some iMessage sends,
+//     which never get a delivery receipt at all).
+//
+//   { type: "resolved", status: "DELIVERED" | "FAILED", errorCode }
+//     Apple's own delivery/error columns resolved after confirmation.
+function watchOutboundStatus({ contactHandle, body, baselineRowId, fullDiskAccessAvailable }, onEvent) {
   let stopped = false;
   let targetRowId = null;
   let findTimer = null;
   let statusTimer = null;
-  const deadline = Date.now() + OUTBOUND_STATUS_TIMEOUT_MS;
+  const confirmDeadline = Date.now() + CONFIRM_TIMEOUT_MS;
+  const resolveDeadline = Date.now() + RESOLVE_TIMEOUT_MS;
 
   function findRow() {
     if (stopped) return;
-    if (Date.now() > deadline) {
+    if (Date.now() > confirmDeadline) {
+      if (fullDiskAccessAvailable) onEvent({ type: "not_confirmed" });
       stop();
       return;
     }
@@ -114,7 +132,7 @@ function watchOutboundStatus({ contactHandle, body, baselineRowId }, onResolved)
     try {
       db = openReadOnly();
       if (!db) {
-        findTimer = setTimeout(findRow, OUTBOUND_STATUS_POLL_MS);
+        findTimer = setTimeout(findRow, OUTBOUND_POLL_MS);
         return;
       }
       const row = db
@@ -130,12 +148,13 @@ function watchOutboundStatus({ contactHandle, body, baselineRowId }, onResolved)
 
       if (row) {
         targetRowId = row.rowid;
+        onEvent({ type: "confirmed" });
         checkStatus(row);
       } else {
-        findTimer = setTimeout(findRow, OUTBOUND_STATUS_POLL_MS);
+        findTimer = setTimeout(findRow, OUTBOUND_POLL_MS);
       }
     } catch {
-      findTimer = setTimeout(findRow, OUTBOUND_STATUS_POLL_MS);
+      findTimer = setTimeout(findRow, OUTBOUND_POLL_MS);
     } finally {
       db?.close();
     }
@@ -144,20 +163,20 @@ function watchOutboundStatus({ contactHandle, body, baselineRowId }, onResolved)
   function checkStatus(row) {
     if (stopped) return;
     if (row.error && row.error !== 0) {
-      onResolved({ status: "FAILED", errorCode: row.error });
+      onEvent({ type: "resolved", status: "FAILED", errorCode: row.error });
       stop();
       return;
     }
     if (row.is_delivered) {
-      onResolved({ status: "DELIVERED", errorCode: null });
+      onEvent({ type: "resolved", status: "DELIVERED", errorCode: null });
       stop();
       return;
     }
-    if (Date.now() > deadline) {
-      stop(); // gave up -- leave the earlier optimistic status as-is
+    if (Date.now() > resolveDeadline) {
+      stop(); // gave up -- no further correction, confirmed SENT stands
       return;
     }
-    statusTimer = setTimeout(pollStatus, OUTBOUND_STATUS_POLL_MS);
+    statusTimer = setTimeout(pollStatus, OUTBOUND_POLL_MS);
   }
 
   function pollStatus() {
@@ -166,13 +185,13 @@ function watchOutboundStatus({ contactHandle, body, baselineRowId }, onResolved)
     try {
       db = openReadOnly();
       if (!db) {
-        statusTimer = setTimeout(pollStatus, OUTBOUND_STATUS_POLL_MS);
+        statusTimer = setTimeout(pollStatus, OUTBOUND_POLL_MS);
         return;
       }
       const row = db.prepare("SELECT is_delivered, error FROM message WHERE ROWID = ?").get(targetRowId);
       if (row) checkStatus({ rowid: targetRowId, ...row });
     } catch {
-      statusTimer = setTimeout(pollStatus, OUTBOUND_STATUS_POLL_MS);
+      statusTimer = setTimeout(pollStatus, OUTBOUND_POLL_MS);
     } finally {
       db?.close();
     }
