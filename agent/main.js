@@ -5,7 +5,12 @@ const keytar = require("keytar");
 
 const { AgentSocket } = require("./src/wsClient");
 const { sendIMessage, sendIMessageAttachment, startFaceTime, watchFaceTimeCall } = require("./src/messagesBridge");
-const { watchChatDb, getMaxMessageRowId, watchOutboundStatus } = require("./src/chatDbWatcher");
+const {
+  watchChatDb,
+  getMaxMessageRowId,
+  watchOutboundStatus,
+  registerPendingSelfSend,
+} = require("./src/chatDbWatcher");
 const {
   checkPermissions,
   openFullDiskAccessSettings,
@@ -173,6 +178,12 @@ function startAgent(token, device) {
     onSendMessage: async (msg) => {
       const baselineRowId = getMaxMessageRowId();
       const fullDiskAccessAvailable = checkPermissions().fullDiskAccess;
+      // Register before sending so the general chat.db watcher (which also
+      // picks up messages sent from other devices, like the user's iPhone)
+      // knows this particular row is one we sent ourselves and shouldn't be
+      // reported as externally-originated. Only applies to text sends, same
+      // limitation as watchOutboundStatus below.
+      if (!msg.mediaUrl && msg.body) registerPendingSelfSend(msg.to, msg.body);
       try {
         if (msg.mediaUrl) {
           await sendIMessageAttachment(msg.to, msg.mediaUrl);
@@ -282,6 +293,13 @@ function startAgent(token, device) {
     (inbound) => {
       socket.send({ type: "inbound_message", ...inbound });
       logTraffic({ direction: "in", kind: "imessage", contact: inbound.from, body: inbound.body, status: "received" });
+    },
+    (external) => {
+      // A message sent from another device on the same Apple ID (the user's
+      // iPhone, or Messages.app used directly on this Mac) -- not something
+      // the CRM triggered, but the conversation should still reflect it.
+      socket.send({ type: "outbound_message_external", ...external });
+      logTraffic({ direction: "out", kind: "imessage", contact: external.to, body: external.body, status: "sent" });
     },
     (err) => {
       state.lastError = `chat.db read failed: ${err.message}`;

@@ -43,13 +43,42 @@ POSTed to `Company.webhookUrl` whenever an agent reports an inbound message:
   "event": "message.inbound",
   "conversationId": "...",
   "contactHandle": "+15551234567",
+  "isNewConversation": true,
   "message": { "id": "...", "kind": "IMESSAGE", "body": "hey", "mediaUrl": null, "createdAt": "..." }
 }
 ```
 
 Your website should treat this the way it'd treat any inbound-message
 webhook: upsert the conversation, append the message, push to the open UI via
-your own websocket/polling.
+your own websocket/polling. `isNewConversation` tells you directly whether
+this contact handle has ever messaged this device before — use it to decide
+whether to open a new conversation tab rather than inferring it from your
+own state.
+
+A related event covers a case that isn't inbound at all: if "Messages in
+iCloud" is on, a text sent from any of the user's own devices on that Apple
+ID (their iPhone, or someone typing directly into Messages.app on the Mac)
+syncs into the same `chat.db` the agent watches — and gets reported the same
+way, since the CRM's view of the conversation should stay accurate regardless
+of which device actually sent it:
+
+```json
+{
+  "event": "message.sent_from_other_device",
+  "conversationId": "...",
+  "contactHandle": "+15551234567",
+  "isNewConversation": true,
+  "message": { "id": "...", "kind": "IMESSAGE", "body": "running 10 late", "createdAt": "..." }
+}
+```
+
+Handle this exactly like `message.inbound` for conversation/tab purposes —
+same `isNewConversation` semantics — but note `direction` on the stored
+message is `OUTBOUND`, not `INBOUND`, if you're reading it back later via
+`GET /api/conversations/:id/messages`. This only fires for a message that
+wasn't sent through the CRM in the first place; anything sent via
+`POST /api/send` is reported through `message.status` below instead, never
+through this event.
 
 A second event fires every time an **outbound** message's status changes.
 There is no optimistic `SENT` — the initial `202` response's `QUEUED` stands

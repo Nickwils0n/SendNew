@@ -24,16 +24,38 @@ async function deliverToCompanyWebhook(companyId, payload) {
   }
 }
 
-async function deliverInboundToWebhook(companyId, message, conversation) {
+async function deliverInboundToWebhook(companyId, message, conversation, isNewConversation) {
   await deliverToCompanyWebhook(companyId, {
     event: "message.inbound",
     conversationId: conversation.id,
     contactHandle: conversation.contactHandle,
+    isNewConversation: !!isNewConversation,
     message: {
       id: message.id,
       kind: message.kind,
       body: message.body,
       mediaUrl: message.mediaUrl,
+      createdAt: message.createdAt,
+    },
+  });
+}
+
+// A message sent from another device on the same Apple ID (the user's
+// iPhone, or Messages.app used directly on the Mac) -- not triggered by the
+// CRM, but the conversation should still reflect it. isNewConversation is
+// the same signal as message.inbound carries: this contact handle had never
+// been messaged on this device before, so this is likely the first the CRM
+// is hearing of it -- worth opening a new conversation tab for.
+async function deliverExternalOutboundToWebhook(companyId, message, conversation, isNewConversation) {
+  await deliverToCompanyWebhook(companyId, {
+    event: "message.sent_from_other_device",
+    conversationId: conversation.id,
+    contactHandle: conversation.contactHandle,
+    isNewConversation: !!isNewConversation,
+    message: {
+      id: message.id,
+      kind: message.kind,
+      body: message.body,
       createdAt: message.createdAt,
     },
   });
@@ -74,6 +96,7 @@ async function deliverMessageStatusToWebhook(companyId, message) {
 
 module.exports = {
   deliverInboundToWebhook,
+  deliverExternalOutboundToWebhook,
   deliverFacetimeStatusToWebhook,
   deliverMessageStatusToWebhook,
   signPayload,

@@ -18,11 +18,36 @@ function openReadOnly() {
   return new Database(CHAT_DB_PATH, { readonly: true, fileMustExist: true });
 }
 
-// Reads new inbound messages from the Messages.app database. Requires the
-// agent to be granted Full Disk Access (see docs/ARCHITECTURE.md — this is a
-// TCC permission a human must grant once, or that an MDM PPPC profile can
-// pre-grant for machines you administer).
-function watchChatDb(onInboundMessage, onError) {
+// With "Messages in iCloud" enabled, a message sent from any of the user's
+// own devices (an iPhone, or someone typing directly into Messages.app on
+// this Mac) syncs into this same chat.db as a normal outbound row -- not
+// just messages this agent itself sent through the CRM. To tell those apart
+// from our own CRM-triggered sends without needing a hard row-ID handoff
+// between the two watchers, main.js registers a short-lived fingerprint
+// right before it asks Messages.app to send something; anything matching
+// gets treated as "ours" and consumed silently (watchOutboundStatus already
+// reports on it separately). Anything that shows up unregistered came from
+// somewhere else and gets reported as such.
+const PENDING_SELF_SEND_TTL_MS = 15000;
+const pendingSelfSends = new Map(); // `${contact}|${body}` -> expiresAt
+
+function registerPendingSelfSend(contactHandle, body) {
+  pendingSelfSends.set(`${contactHandle}|${body}`, Date.now() + PENDING_SELF_SEND_TTL_MS);
+}
+
+function consumePendingSelfSend(contactHandle, body) {
+  const key = `${contactHandle}|${body}`;
+  const expiresAt = pendingSelfSends.get(key);
+  if (expiresAt === undefined) return false;
+  pendingSelfSends.delete(key);
+  return expiresAt >= Date.now();
+}
+
+// Watches chat.db for both inbound replies and outbound messages sent from
+// somewhere other than this agent (see above). Requires the agent to be
+// granted Full Disk Access (see docs/ARCHITECTURE.md — a TCC permission a
+// human must grant once, or that an MDM PPPC profile can pre-grant).
+function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
   let lastRowId = 0;
   let timer = null;
 
@@ -44,7 +69,7 @@ function watchChatDb(onInboundMessage, onError) {
                   h.id as handle
            FROM message m
            LEFT JOIN handle h ON m.handle_id = h.ROWID
-           WHERE m.ROWID > ? AND m.is_from_me = 0
+           WHERE m.ROWID > ?
            ORDER BY m.ROWID ASC`
         )
         .all(lastRowId);
@@ -52,12 +77,22 @@ function watchChatDb(onInboundMessage, onError) {
       for (const row of rows) {
         lastRowId = Math.max(lastRowId, row.rowid);
         if (!row.text) continue; // skip attachment-only rows for now
-        onInboundMessage({
-          externalId: row.guid,
-          from: row.handle,
-          body: row.text,
-          kind: "IMESSAGE",
-        });
+
+        if (row.is_from_me === 0) {
+          onInboundMessage({
+            externalId: row.guid,
+            from: row.handle,
+            body: row.text,
+            kind: "IMESSAGE",
+          });
+        } else if (!consumePendingSelfSend(row.handle, row.text)) {
+          onExternalOutboundMessage({
+            externalId: row.guid,
+            to: row.handle,
+            body: row.text,
+            kind: "IMESSAGE",
+          });
+        }
       }
     } catch (err) {
       onError?.(err);
@@ -207,4 +242,10 @@ function watchOutboundStatus({ contactHandle, body, baselineRowId, fullDiskAcces
   return stop;
 }
 
-module.exports = { watchChatDb, getMaxMessageRowId, watchOutboundStatus, CHAT_DB_PATH };
+module.exports = {
+  watchChatDb,
+  getMaxMessageRowId,
+  watchOutboundStatus,
+  registerPendingSelfSend,
+  CHAT_DB_PATH,
+};

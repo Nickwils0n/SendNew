@@ -3,6 +3,7 @@ const { verifyDeviceToken } = require("./auth");
 const { prisma } = require("./db");
 const {
   deliverInboundToWebhook,
+  deliverExternalOutboundToWebhook,
   deliverFacetimeStatusToWebhook,
   deliverMessageStatusToWebhook,
 } = require("./webhooks");
@@ -80,6 +81,20 @@ function attachWsServer(httpServer) {
   return wss;
 }
 
+// Used for both a true inbound reply and a message sent from another device
+// on the same Apple ID -- either way, tells the caller whether this contact
+// handle has never been seen on this device before, so the CRM can decide
+// whether to open a new conversation tab rather than guessing from context.
+async function upsertConversation(deviceId, companyId, contactHandle) {
+  const existing = await prisma.conversation.findUnique({
+    where: { deviceId_contactHandle: { deviceId, contactHandle } },
+  });
+  const conversation =
+    existing ||
+    (await prisma.conversation.create({ data: { deviceId, companyId, contactHandle } }));
+  return { conversation, isNewConversation: !existing };
+}
+
 async function handleAgentMessage(deviceId, msg) {
   const device = await prisma.device.findUnique({ where: { id: deviceId } });
   if (!device) return;
@@ -94,15 +109,11 @@ async function handleAgentMessage(deviceId, msg) {
     }
     case "inbound_message": {
       if (!device.companyId) return; // unassigned device, drop
-      const conversation = await prisma.conversation.upsert({
-        where: { deviceId_contactHandle: { deviceId, contactHandle: msg.from } },
-        create: {
-          deviceId,
-          companyId: device.companyId,
-          contactHandle: msg.from,
-        },
-        update: {},
-      });
+      const { conversation, isNewConversation } = await upsertConversation(
+        deviceId,
+        device.companyId,
+        msg.from
+      );
       const saved = await prisma.message.create({
         data: {
           conversationId: conversation.id,
@@ -115,7 +126,31 @@ async function handleAgentMessage(deviceId, msg) {
           externalId: msg.externalId || null,
         },
       });
-      await deliverInboundToWebhook(device.companyId, saved, conversation);
+      await deliverInboundToWebhook(device.companyId, saved, conversation, isNewConversation);
+      break;
+    }
+    case "outbound_message_external": {
+      // A message sent from another device on the same Apple ID (the user's
+      // iPhone, or Messages.app used directly on the Mac) -- not something
+      // the CRM triggered, but the conversation should still reflect it.
+      if (!device.companyId) return;
+      const { conversation, isNewConversation } = await upsertConversation(
+        deviceId,
+        device.companyId,
+        msg.to
+      );
+      const saved = await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          deviceId,
+          direction: "OUTBOUND",
+          kind: msg.kind || "IMESSAGE",
+          body: msg.body || null,
+          status: "SENT",
+          externalId: msg.externalId || null,
+        },
+      });
+      await deliverExternalOutboundToWebhook(device.companyId, saved, conversation, isNewConversation);
       break;
     }
     case "status_update": {
