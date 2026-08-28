@@ -39,7 +39,7 @@ router.post(
     }
 
     const mimeType = req.header("content-type") || "application/octet-stream";
-    const mediaUrl = await uploadAttachment(req.body, mimeType, deviceId);
+    const mediaUrl = await uploadAttachment(req.body, mimeType);
 
     const { conversation, isNewConversation } = await upsertConversation(
       deviceId,

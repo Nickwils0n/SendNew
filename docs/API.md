@@ -26,11 +26,13 @@ there's no separate attachment endpoint on the company-facing API.
 - **Outbound** (send an image): pass `mediaUrl` on `POST /api/send` pointing
   at wherever your CRM already hosts the image. The agent downloads it to a
   temp file, sends it via Messages.app, and deletes the temp file after.
-- **Inbound** (a contact sends an image): the agent uploads it to S3-compatible
-  object storage (see `S3_*` env vars in `server/.env.example` — Cloudflare
-  R2 is the recommended default) and the resulting public URL arrives as
-  `mediaUrl` on the normal `message.inbound` webhook, same as any other
-  inbound message, just with `body: null` and `mediaUrl` populated instead.
+- **Inbound** (a contact sends an image): the agent uploads it to this server
+  (`POST /agent/attachments`, device-authenticated), which saves it to a
+  Railway Volume and serves it back out at
+  `<PUBLIC_URL_BASE>/media/<filename>` (see `ATTACHMENTS_DIR`/`PUBLIC_URL_BASE`
+  in `server/.env.example`). That URL arrives as `mediaUrl` on the normal
+  `message.inbound` webhook, same as any other inbound message, just with
+  `body: null` and `mediaUrl` populated instead.
 
 **Current limitations, not yet built:**
 - Only image attachments are handled (`image/*` MIME types). Video, audio
@@ -40,9 +42,12 @@ there's no separate attachment endpoint on the company-facing API.
   iPhone, or Messages.app used directly on the Mac — see
   `message.sent_from_other_device` above) isn't uploaded/relayed yet, only
   text is handled on that path so far.
-- If the `S3_*` env vars aren't configured on the server, inbound image
-  uploads fail outright (the agent logs the error) — text messaging is
-  unaffected either way.
+- If `ATTACHMENTS_DIR`/`PUBLIC_URL_BASE` aren't configured on the server,
+  inbound image uploads fail outright (the agent logs the error) — text
+  messaging is unaffected either way.
+- Served images have no per-request auth — an unguessable filename is the
+  only thing standing between the URL and the file. Fine for this project's
+  current scale; revisit if that's not an acceptable tradeoff later.
 
 ## Admin (your CRM website's backend → server, `x-admin-secret`)
 

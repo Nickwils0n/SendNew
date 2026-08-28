@@ -1,47 +1,32 @@
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const fs = require("fs/promises");
+const path = require("path");
 const { nanoid } = require("nanoid");
 
-let client = null;
+// Backed by a Railway Volume mounted at ATTACHMENTS_DIR -- persists across
+// deploys/restarts of this service. Railway volumes have no built-in public
+// URL, so routes/media.js serves these files back out over plain HTTP;
+// PUBLIC_URL_BASE is this server's own public URL, used to build the
+// mediaUrl handed to the CRM. Only safe with a single server instance/replica
+// -- a volume isn't shared across horizontally scaled replicas, which isn't
+// a concern at this project's current scale but would be if that changes.
+const ATTACHMENTS_DIR = process.env.ATTACHMENTS_DIR || path.join(__dirname, "..", "data", "attachments");
 
-function getClient() {
-  if (client) return client;
-  const required = ["S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "S3_PUBLIC_URL_BASE"];
-  const missing = required.filter((key) => !process.env[key]);
-  if (missing.length) {
-    throw new Error(`image attachments are not configured -- missing env vars: ${missing.join(", ")}`);
+async function uploadAttachment(buffer, mimeType) {
+  if (!process.env.PUBLIC_URL_BASE) {
+    throw new Error("image attachments are not configured -- PUBLIC_URL_BASE env var is missing");
   }
-  client = new S3Client({
-    region: process.env.S3_REGION || "auto",
-    endpoint: process.env.S3_ENDPOINT,
-    credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY_ID,
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-    },
-  });
-  return client;
-}
 
-// Works with any S3-compatible provider (Cloudflare R2, AWS S3, Backblaze B2,
-// self-hosted MinIO) via env vars -- see server/.env.example. Returns the
-// public URL the CRM's browser can load directly; S3_PUBLIC_URL_BASE must
-// point at a bucket/domain that's actually publicly readable (R2's "public
-// access" toggle + custom domain, an S3 bucket policy, etc.) -- this module
-// doesn't set that up for you, it just uploads.
-async function uploadAttachment(buffer, mimeType, deviceId) {
   const ext = mimeType?.split("/")[1]?.split("+")[0] || "bin";
-  const key = `attachments/${deviceId}/${Date.now()}-${nanoid(10)}.${ext}`;
+  // Unguessable filename doubles as the only access control on the serving
+  // route below -- there's no per-request auth on it, so this is what keeps
+  // these URLs from being enumerable.
+  const filename = `${Date.now()}-${nanoid(24)}.${ext}`;
 
-  await getClient().send(
-    new PutObjectCommand({
-      Bucket: process.env.S3_BUCKET,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType || "application/octet-stream",
-    })
-  );
+  await fs.mkdir(ATTACHMENTS_DIR, { recursive: true });
+  await fs.writeFile(path.join(ATTACHMENTS_DIR, filename), buffer);
 
-  const base = process.env.S3_PUBLIC_URL_BASE.replace(/\/+$/, "");
-  return `${base}/${key}`;
+  const base = process.env.PUBLIC_URL_BASE.replace(/\/+$/, "");
+  return `${base}/media/${filename}`;
 }
 
-module.exports = { uploadAttachment };
+module.exports = { uploadAttachment, ATTACHMENTS_DIR };

@@ -17,6 +17,7 @@ const cors = require("cors");
 
 const agentAuthRoutes = require("./routes/agentAuth");
 const agentAttachmentsRoutes = require("./routes/agentAttachments");
+const mediaRoutes = require("./routes/media");
 const adminRoutes = require("./routes/admin");
 const messageRoutes = require("./routes/messages");
 const { attachWsServer } = require("./wsHub");
@@ -29,6 +30,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.use("/agent", agentAuthRoutes);
 app.use("/agent", agentAttachmentsRoutes);
+app.use("/media", mediaRoutes);
 app.use("/admin", adminRoutes);
 app.use("/api", messageRoutes);
 
