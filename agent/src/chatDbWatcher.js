@@ -170,9 +170,15 @@ function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
             }
             // unsupported attachment type (or none) -- nothing usable to report yet
           }
+        } else if (getMediaAttachment(db, row.rowid)) {
+          // Attachment-only rows carry a placeholder character (e.g. U+FFFC)
+          // in `text`/attributedBody, not real content -- reporting that as
+          // if it were a typed message would misrepresent both our own
+          // attachment sends (already handled separately by
+          // watchOutboundStatus's matchAttachment mode) and attachments sent
+          // from another device, which aren't relayed yet at all (documented
+          // gap -- only text is handled on this path so far).
         } else if (text && !consumePendingSelfSend(row.handle, text)) {
-          // Attachments sent from another device (e.g. the iPhone) aren't
-          // relayed yet -- only text is handled on this path so far.
           onExternalOutboundMessage({
             externalId: row.guid,
             to: row.handle,
