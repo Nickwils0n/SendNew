@@ -47,7 +47,7 @@ async function sendIMessage(to, body) {
 // attachment rows had ever appeared in chat.db), leaving Messages.app stuck
 // trying to attach a file that no longer existed. Give it a few seconds of
 // grace before cleaning up.
-const ATTACHMENT_CLEANUP_DELAY_MS = 5000;
+const ATTACHMENT_CLEANUP_DELAY_MS = 10 * 60 * 1000; // TEMP: widened for live diagnosis, see chat log
 
 async function sendIMessageAttachment(to, mediaUrl) {
   const { localPath, diagnostics } = await downloadToTempFile(mediaUrl);
