@@ -189,7 +189,15 @@ function getMaxMessageRowId() {
 //
 //   { type: "resolved", status: "DELIVERED" | "FAILED", errorCode }
 //     Apple's own delivery/error columns resolved after confirmation.
-function watchOutboundStatus({ contactHandle, body, baselineRowId, fullDiskAccessAvailable }, onEvent) {
+//
+// `matchAttachment: true` looks for the newest outbound row from this
+// contact that has an attachment at all, instead of matching on `body` text
+// (attachment rows have no text) -- used for image/audio sends instead of
+// the text-matching path.
+function watchOutboundStatus(
+  { contactHandle, body, baselineRowId, fullDiskAccessAvailable, matchAttachment },
+  onEvent
+) {
   let stopped = false;
   let targetRowId = null;
   let findTimer = null;
@@ -211,16 +219,28 @@ function watchOutboundStatus({ contactHandle, body, baselineRowId, fullDiskAcces
         findTimer = setTimeout(findRow, OUTBOUND_POLL_MS);
         return;
       }
-      const row = db
-        .prepare(
-          `SELECT m.ROWID as rowid, m.is_delivered, m.error
-           FROM message m
-           LEFT JOIN handle h ON m.handle_id = h.ROWID
-           WHERE m.ROWID > ? AND m.is_from_me = 1 AND m.text = ? AND h.id = ?
-           ORDER BY m.ROWID ASC
-           LIMIT 1`
-        )
-        .get(baselineRowId, body, contactHandle);
+      const row = matchAttachment
+        ? db
+            .prepare(
+              `SELECT m.ROWID as rowid, m.is_delivered, m.error
+               FROM message m
+               LEFT JOIN handle h ON m.handle_id = h.ROWID
+               WHERE m.ROWID > ? AND m.is_from_me = 1 AND h.id = ?
+                 AND EXISTS (SELECT 1 FROM message_attachment_join maj WHERE maj.message_id = m.ROWID)
+               ORDER BY m.ROWID ASC
+               LIMIT 1`
+            )
+            .get(baselineRowId, contactHandle)
+        : db
+            .prepare(
+              `SELECT m.ROWID as rowid, m.is_delivered, m.error
+               FROM message m
+               LEFT JOIN handle h ON m.handle_id = h.ROWID
+               WHERE m.ROWID > ? AND m.is_from_me = 1 AND m.text = ? AND h.id = ?
+               ORDER BY m.ROWID ASC
+               LIMIT 1`
+            )
+            .get(baselineRowId, body, contactHandle);
 
       if (row) {
         targetRowId = row.rowid;

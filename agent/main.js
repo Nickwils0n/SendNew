@@ -191,15 +191,19 @@ function startAgent(token, device) {
     onSendMessage: async (msg) => {
       const baselineRowId = getMaxMessageRowId();
       const fullDiskAccessAvailable = checkPermissions().fullDiskAccess;
+      const isAttachment = !!msg.mediaUrl;
       // Register before sending so the general chat.db watcher (which also
       // picks up messages sent from other devices, like the user's iPhone)
       // knows this particular row is one we sent ourselves and shouldn't be
-      // reported as externally-originated. Only applies to text sends, same
-      // limitation as watchOutboundStatus below.
-      if (!msg.mediaUrl && msg.body) registerPendingSelfSend(msg.to, msg.body);
+      // reported as externally-originated. Only applies to text sends --
+      // attachment rows are matched a different way (see matchAttachment
+      // below), so no fingerprint is needed for those.
+      if (!isAttachment && msg.body) registerPendingSelfSend(msg.to, msg.body);
+
+      let downloadDiagnostics = null;
       try {
-        if (msg.mediaUrl) {
-          await sendIMessageAttachment(msg.to, msg.mediaUrl);
+        if (isAttachment) {
+          downloadDiagnostics = await sendIMessageAttachment(msg.to, msg.mediaUrl);
         } else {
           await sendIMessage(msg.to, msg.body);
         }
@@ -207,44 +211,53 @@ function startAgent(token, device) {
         // A successful AppleScript call only means Messages.app accepted the
         // request -- not that anything was actually sent. Don't report SENT
         // until chat.db actually confirms it created the row; the message
-        // stays at its existing QUEUED status in the meantime.
-        if (!msg.mediaUrl && msg.body) {
-          watchOutboundStatus(
-            { contactHandle: msg.to, body: msg.body, baselineRowId, fullDiskAccessAvailable },
-            (event) => {
-              if (event.type === "confirmed") {
-                socket.send({ type: "status_update", messageId: msg.messageId, status: "SENT" });
-                logTraffic({ direction: "out", kind: "imessage", contact: msg.to, body: msg.body, status: "sent" });
-              } else if (event.type === "not_confirmed") {
-                const error = "Messages.app never confirmed creating this message";
-                socket.send({ type: "status_update", messageId: msg.messageId, status: "FAILED", error });
-                logTraffic({ direction: "out", kind: "imessage", contact: msg.to, body: msg.body, status: "failed", error });
-              } else if (event.type === "resolved") {
-                socket.send({
-                  type: "status_update",
-                  messageId: msg.messageId,
-                  status: event.status,
-                  error: event.status === "FAILED" ? `chat.db error code ${event.errorCode}` : null,
+        // stays at its existing QUEUED status in the meantime. Attachment
+        // rows have no body text to match on, so matchAttachment looks for
+        // the newest outbound row from this contact with any attachment
+        // instead.
+        watchOutboundStatus(
+          {
+            contactHandle: msg.to,
+            body: msg.body,
+            baselineRowId,
+            fullDiskAccessAvailable,
+            matchAttachment: isAttachment,
+          },
+          (event) => {
+            if (event.type === "confirmed") {
+              socket.send({ type: "status_update", messageId: msg.messageId, status: "SENT" });
+              logTraffic({
+                direction: "out",
+                kind: "imessage",
+                contact: msg.to,
+                body: isAttachment
+                  ? `[attachment sent: ${downloadDiagnostics?.actualBytes ?? "?"} bytes, ${downloadDiagnostics?.contentType ?? "unknown type"}]`
+                  : msg.body,
+                status: "sent",
+              });
+            } else if (event.type === "not_confirmed") {
+              const error = "Messages.app never confirmed creating this message";
+              socket.send({ type: "status_update", messageId: msg.messageId, status: "FAILED", error });
+              logTraffic({ direction: "out", kind: "imessage", contact: msg.to, body: msg.body, status: "failed", error });
+            } else if (event.type === "resolved") {
+              socket.send({
+                type: "status_update",
+                messageId: msg.messageId,
+                status: event.status,
+                error: event.status === "FAILED" ? `chat.db error code ${event.errorCode}` : null,
+              });
+              if (event.status === "FAILED") {
+                logTraffic({
+                  direction: "out",
+                  kind: "imessage",
+                  contact: msg.to,
+                  body: `[delivery failed: error ${event.errorCode}]`,
+                  status: "failed",
                 });
-                if (event.status === "FAILED") {
-                  logTraffic({
-                    direction: "out",
-                    kind: "imessage",
-                    contact: msg.to,
-                    body: `[delivery failed: error ${event.errorCode}]`,
-                    status: "failed",
-                  });
-                }
               }
             }
-          );
-        } else {
-          // Attachment sends: chat.db's text column won't match (attachment
-          // rows have no body text), so we can't confirm via the same
-          // lookup. Falls back to the old optimistic behavior for now.
-          socket.send({ type: "status_update", messageId: msg.messageId, status: "SENT" });
-          logTraffic({ direction: "out", kind: "imessage", contact: msg.to, body: msg.body, status: "sent" });
-        }
+          }
+        );
       } catch (err) {
         socket.send({
           type: "status_update",

@@ -34,11 +34,16 @@ async function sendIMessage(to, body) {
 // mediaUrl from the CRM is a remote URL (something it hosts), not a path on
 // this Mac -- Messages.app's AppleScript `send` needs an actual local
 // POSIX file, so this downloads it to a temp file first and cleans up after,
-// regardless of whether the send succeeds.
+// regardless of whether the send succeeds. Returns download diagnostics
+// (byte count, actual content-type, what the server claimed) so a caller can
+// log/report them -- a mismatch here (e.g. a tiny byte count, or a
+// content-type that isn't actually an image) is exactly the kind of silent
+// failure that AppleScript's `send` won't itself ever surface as an error.
 async function sendIMessageAttachment(to, mediaUrl) {
-  const localPath = await downloadToTempFile(mediaUrl);
+  const { localPath, diagnostics } = await downloadToTempFile(mediaUrl);
   try {
-    return await runAppleScript("send-imessage-attachment.applescript", [to, localPath]);
+    await runAppleScript("send-imessage-attachment.applescript", [to, localPath]);
+    return diagnostics;
   } finally {
     fs.unlink(localPath, () => {});
   }
@@ -72,10 +77,35 @@ function transcodeAudioToM4a(inputPath) {
   });
 }
 
+// A tiny/mismatched download can happen even with a 200 OK -- e.g. a CDN or
+// auth layer serving an HTML error page or a redirect target instead of the
+// real file, none of which fetch() itself treats as a failure. This is
+// exactly the class of bug AppleScript's `send` can't detect either, since
+// it just hands whatever bytes exist on disk to Messages.app without caring
+// what they actually are.
 async function downloadToTempFile(url) {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`failed to download attachment: HTTP ${res.status}`);
+  const contentType = res.headers.get("content-type") || "unknown";
+  const declaredLength = res.headers.get("content-length");
+  if (!res.ok) throw new Error(`failed to download attachment: HTTP ${res.status} (content-type: ${contentType})`);
+
   const buffer = Buffer.from(await res.arrayBuffer());
+  const diagnostics = {
+    url,
+    httpStatus: res.status,
+    contentType,
+    declaredLength: declaredLength ? Number(declaredLength) : null,
+    actualBytes: buffer.length,
+  };
+
+  if (buffer.length === 0) {
+    throw new Error(`downloaded attachment is empty (0 bytes) -- content-type was "${contentType}"`);
+  }
+  if (contentType.startsWith("text/") || contentType.includes("json")) {
+    throw new Error(
+      `downloaded attachment looks like an error page, not a file -- content-type was "${contentType}", ${buffer.length} bytes`
+    );
+  }
 
   let ext = "";
   try {
@@ -88,7 +118,7 @@ async function downloadToTempFile(url) {
     `sendnew-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`
   );
   fs.writeFileSync(tempPath, buffer);
-  return tempPath;
+  return { localPath: tempPath, diagnostics };
 }
 
 // Uploads an image attachment chatDbWatcher found in an inbound message to
