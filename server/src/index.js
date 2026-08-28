@@ -16,6 +16,7 @@ const express = require("express");
 const cors = require("cors");
 
 const agentAuthRoutes = require("./routes/agentAuth");
+const agentAttachmentsRoutes = require("./routes/agentAttachments");
 const adminRoutes = require("./routes/admin");
 const messageRoutes = require("./routes/messages");
 const { attachWsServer } = require("./wsHub");
@@ -27,6 +28,7 @@ app.use(express.json({ limit: "10mb" }));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.use("/agent", agentAuthRoutes);
+app.use("/agent", agentAttachmentsRoutes);
 app.use("/admin", adminRoutes);
 app.use("/api", messageRoutes);
 

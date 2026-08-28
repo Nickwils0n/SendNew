@@ -43,6 +43,29 @@ function consumePendingSelfSend(contactHandle, body) {
   return expiresAt >= Date.now();
 }
 
+// Attachment rows have no `text`; the actual file lives at a local path
+// recorded in chat.db's own attachment table. Only image attachments are
+// handled right now -- other types (video, vCards, etc.) are silently
+// skipped, a documented gap rather than an oversight.
+function getImageAttachment(db, messageRowId) {
+  const row = db
+    .prepare(
+      `SELECT a.filename, a.mime_type
+       FROM message_attachment_join maj
+       JOIN attachment a ON maj.attachment_id = a.ROWID
+       WHERE maj.message_id = ?
+       ORDER BY a.ROWID ASC
+       LIMIT 1`
+    )
+    .get(messageRowId);
+  if (!row?.filename || !row.mime_type?.startsWith("image/")) return null;
+
+  const filePath = row.filename.startsWith("~")
+    ? path.join(os.homedir(), row.filename.slice(1))
+    : row.filename;
+  return { filePath, mimeType: row.mime_type };
+}
+
 // Watches chat.db for both inbound replies and outbound messages sent from
 // somewhere other than this agent (see above). Requires the agent to be
 // granted Full Disk Access (see docs/ARCHITECTURE.md — a TCC permission a
@@ -76,16 +99,26 @@ function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
 
       for (const row of rows) {
         lastRowId = Math.max(lastRowId, row.rowid);
-        if (!row.text) continue; // skip attachment-only rows for now
 
         if (row.is_from_me === 0) {
-          onInboundMessage({
-            externalId: row.guid,
-            from: row.handle,
-            body: row.text,
-            kind: "IMESSAGE",
-          });
-        } else if (!consumePendingSelfSend(row.handle, row.text)) {
+          if (row.text) {
+            onInboundMessage({ externalId: row.guid, from: row.handle, body: row.text, kind: "IMESSAGE" });
+          } else {
+            const attachment = getImageAttachment(db, row.rowid);
+            if (attachment) {
+              onInboundMessage({
+                externalId: row.guid,
+                from: row.handle,
+                body: null,
+                kind: "IMESSAGE",
+                attachment,
+              });
+            }
+            // non-image attachment (or none) -- nothing usable to report yet
+          }
+        } else if (row.text && !consumePendingSelfSend(row.handle, row.text)) {
+          // Image attachments sent from another device (e.g. the iPhone)
+          // aren't relayed yet -- only text is handled on this path so far.
           onExternalOutboundMessage({
             externalId: row.guid,
             to: row.handle,

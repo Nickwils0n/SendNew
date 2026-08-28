@@ -12,8 +12,37 @@ provisioning tooling, not the public website.
 - `POST /api/send` `{ deviceId, to, body, mediaUrl?, kind? }` — send an
   iMessage/SMS through a given Mac mini. Returns `202` with the created
   `message` row (status `QUEUED`), or `503` if that device isn't currently
-  connected.
+  connected. `mediaUrl`, if set, must be a URL the Mac mini can actually
+  download from (publicly reachable, or at least reachable from wherever
+  that Mac sits) — the agent fetches it and hands the file to Messages.app,
+  it does not treat `mediaUrl` as anything Apple-specific.
 - `POST /api/facetime` `{ deviceId, to, video? }` — start a FaceTime call.
+
+## Image attachments
+
+Inbound and outbound images both go through the same `mediaUrl` field —
+there's no separate attachment endpoint on the company-facing API.
+
+- **Outbound** (send an image): pass `mediaUrl` on `POST /api/send` pointing
+  at wherever your CRM already hosts the image. The agent downloads it to a
+  temp file, sends it via Messages.app, and deletes the temp file after.
+- **Inbound** (a contact sends an image): the agent uploads it to S3-compatible
+  object storage (see `S3_*` env vars in `server/.env.example` — Cloudflare
+  R2 is the recommended default) and the resulting public URL arrives as
+  `mediaUrl` on the normal `message.inbound` webhook, same as any other
+  inbound message, just with `body: null` and `mediaUrl` populated instead.
+
+**Current limitations, not yet built:**
+- Only image attachments are handled (`image/*` MIME types). Video, audio
+  clips, and other file types are silently skipped — nothing is stored or
+  delivered for them yet.
+- An image sent from another device on the same Apple ID (the user's
+  iPhone, or Messages.app used directly on the Mac — see
+  `message.sent_from_other_device` above) isn't uploaded/relayed yet, only
+  text is handled on that path so far.
+- If the `S3_*` env vars aren't configured on the server, inbound image
+  uploads fail outright (the agent logs the error) — text messaging is
+  unaffected either way.
 
 ## Admin (your CRM website's backend → server, `x-admin-secret`)
 

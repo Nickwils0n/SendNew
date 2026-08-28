@@ -1,6 +1,7 @@
 const { WebSocketServer } = require("ws");
 const { verifyDeviceToken } = require("./auth");
 const { prisma } = require("./db");
+const { upsertConversation } = require("./conversations");
 const {
   deliverInboundToWebhook,
   deliverExternalOutboundToWebhook,
@@ -79,26 +80,6 @@ function attachWsServer(httpServer) {
   });
 
   return wss;
-}
-
-// Used for both a true inbound reply and a message sent from another device
-// on the same Apple ID -- either way, tells the caller whether this contact
-// handle has never been seen on this device before, so the CRM can decide
-// whether to open a new conversation tab rather than guessing from context.
-//
-// Explicitly updates (rather than leaving untouched) when the conversation
-// already exists, purely so Prisma's @updatedAt bumps -- GET /api/conversations
-// orders by updatedAt desc, and the CRM uses it as a "did anything happen
-// here" signal, so a conversation that never gets touched again after its
-// first message would sort as if it went permanently stale.
-async function upsertConversation(deviceId, companyId, contactHandle) {
-  const existing = await prisma.conversation.findUnique({
-    where: { deviceId_contactHandle: { deviceId, contactHandle } },
-  });
-  const conversation = existing
-    ? await prisma.conversation.update({ where: { id: existing.id }, data: {} })
-    : await prisma.conversation.create({ data: { deviceId, companyId, contactHandle } });
-  return { conversation, isNewConversation: !existing };
 }
 
 async function handleAgentMessage(deviceId, msg) {

@@ -1,5 +1,7 @@
 const { execFile } = require("child_process");
 const path = require("path");
+const os = require("os");
+const fs = require("fs");
 const { shell } = require("electron");
 
 const SCRIPTS_DIR = path.join(__dirname, "..", "scripts");
@@ -28,8 +30,59 @@ async function sendIMessage(to, body) {
   return runAppleScript("send-imessage.applescript", [to, body]);
 }
 
-async function sendIMessageAttachment(to, filePath) {
-  return runAppleScript("send-imessage-attachment.applescript", [to, filePath]);
+// mediaUrl from the CRM is a remote URL (something it hosts), not a path on
+// this Mac -- Messages.app's AppleScript `send` needs an actual local
+// POSIX file, so this downloads it to a temp file first and cleans up after,
+// regardless of whether the send succeeds.
+async function sendIMessageAttachment(to, mediaUrl) {
+  const localPath = await downloadToTempFile(mediaUrl);
+  try {
+    return await runAppleScript("send-imessage-attachment.applescript", [to, localPath]);
+  } finally {
+    fs.unlink(localPath, () => {});
+  }
+}
+
+async function downloadToTempFile(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`failed to download attachment: HTTP ${res.status}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+
+  let ext = "";
+  try {
+    ext = path.extname(new URL(url).pathname);
+  } catch {
+    // non-URL input (e.g. malformed mediaUrl) -- fall through with no extension
+  }
+  const tempPath = path.join(
+    os.tmpdir(),
+    `sendnew-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`
+  );
+  fs.writeFileSync(tempPath, buffer);
+  return tempPath;
+}
+
+// Uploads an image attachment chatDbWatcher found in an inbound message to
+// the server, which stores it in object storage and delivers it to the CRM
+// as a normal message.inbound webhook (mediaUrl populated). Deliberately a
+// plain authenticated POST rather than going over the WebSocket, since
+// binary uploads don't fit the JSON message protocol used there.
+async function uploadInboundAttachment(serverUrl, deviceToken, { contactHandle, externalId, filePath, mimeType }) {
+  const buffer = fs.readFileSync(filePath);
+  const res = await fetch(`${serverUrl}/agent/attachments`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${deviceToken}`,
+      "content-type": mimeType,
+      "x-contact-handle": contactHandle,
+      ...(externalId ? { "x-external-id": externalId } : {}),
+    },
+    body: buffer,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`attachment upload failed: HTTP ${res.status} ${text}`);
+  }
 }
 
 // FaceTime has no scriptable dictionary; the supported way to start a call
@@ -99,4 +152,10 @@ function watchFaceTimeCall(onStatus) {
   };
 }
 
-module.exports = { sendIMessage, sendIMessageAttachment, startFaceTime, watchFaceTimeCall };
+module.exports = {
+  sendIMessage,
+  sendIMessageAttachment,
+  uploadInboundAttachment,
+  startFaceTime,
+  watchFaceTimeCall,
+};

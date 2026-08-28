@@ -4,7 +4,13 @@ const path = require("path");
 const keytar = require("keytar");
 
 const { AgentSocket } = require("./src/wsClient");
-const { sendIMessage, sendIMessageAttachment, startFaceTime, watchFaceTimeCall } = require("./src/messagesBridge");
+const {
+  sendIMessage,
+  sendIMessageAttachment,
+  uploadInboundAttachment,
+  startFaceTime,
+  watchFaceTimeCall,
+} = require("./src/messagesBridge");
 const {
   watchChatDb,
   getMaxMessageRowId,
@@ -296,6 +302,24 @@ function startAgent(token, device) {
 
   stopChatWatcher = watchChatDb(
     (inbound) => {
+      if (inbound.attachment) {
+        // Binary upload doesn't fit the WS JSON protocol -- goes over its
+        // own authenticated HTTP route instead; the server creates the
+        // Message/webhook delivery once the upload succeeds.
+        uploadInboundAttachment(SERVER_HTTP_URL, token, {
+          contactHandle: inbound.from,
+          externalId: inbound.externalId,
+          filePath: inbound.attachment.filePath,
+          mimeType: inbound.attachment.mimeType,
+        })
+          .then(() => {
+            logTraffic({ direction: "in", kind: "imessage", contact: inbound.from, body: "[image]", status: "received" });
+          })
+          .catch((err) => {
+            socket.send({ type: "log", level: "error", message: `attachment upload failed: ${err.message}` });
+          });
+        return;
+      }
       socket.send({ type: "inbound_message", ...inbound });
       logTraffic({ direction: "in", kind: "imessage", contact: inbound.from, body: inbound.body, status: "received" });
     },
