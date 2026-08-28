@@ -155,21 +155,26 @@ function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
         const text = readMessageText(row);
 
         if (row.is_from_me === 0) {
-          if (text) {
+          // Check for an attachment before falling back to text -- an
+          // attachment-only row carries the same placeholder character
+          // (e.g. U+FFFC) in `text`/attributedBody as an outbound attachment
+          // row does (see the outbound branch below), not real content.
+          // Checking `text` first would misreport every inbound image/audio
+          // message as a blank/placeholder text message and never look at
+          // the actual attachment.
+          const attachment = getMediaAttachment(db, row.rowid);
+          if (attachment) {
+            onInboundMessage({
+              externalId: row.guid,
+              from: row.handle,
+              body: null,
+              kind: "IMESSAGE",
+              attachment,
+            });
+          } else if (text) {
             onInboundMessage({ externalId: row.guid, from: row.handle, body: text, kind: "IMESSAGE" });
-          } else {
-            const attachment = getMediaAttachment(db, row.rowid);
-            if (attachment) {
-              onInboundMessage({
-                externalId: row.guid,
-                from: row.handle,
-                body: null,
-                kind: "IMESSAGE",
-                attachment,
-              });
-            }
-            // unsupported attachment type (or none) -- nothing usable to report yet
           }
+          // unsupported attachment type (or no attachment, no text) -- nothing usable to report yet
         } else if (getMediaAttachment(db, row.rowid)) {
           // Attachment-only rows carry a placeholder character (e.g. U+FFFC)
           // in `text`/attributedBody, not real content -- reporting that as
