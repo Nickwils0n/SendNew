@@ -18,6 +18,48 @@ function openReadOnly() {
   return new Database(CHAT_DB_PATH, { readonly: true, fileMustExist: true });
 }
 
+// On newer macOS versions, chat.db's plain `message.text` column is often
+// empty even for a normal text message -- the actual content instead lives
+// in `attributedBody`, a binary NSKeyedArchiver-serialized NSAttributedString
+// blob. Apple doesn't document this format; the byte pattern below (an
+// "NSString" marker followed by a fixed 5-byte type marker, then a length
+// prefix and the UTF-8 text) is reverse-engineered but a stable, widely-used
+// pattern across other chat.db tooling. Returns null rather than guessing if
+// the structure doesn't match what's expected.
+const ATTRIBUTED_BODY_TYPE_MARKER = Buffer.from([0x01, 0x94, 0x84, 0x01, 0x2b]);
+
+function extractAttributedBodyText(buffer) {
+  if (!buffer || buffer.length === 0) return null;
+  const markerIndex = buffer.indexOf("NSString", 0, "latin1");
+  if (markerIndex === -1) return null;
+
+  let cursor = markerIndex + "NSString".length;
+  if (!buffer.subarray(cursor, cursor + ATTRIBUTED_BODY_TYPE_MARKER.length).equals(ATTRIBUTED_BODY_TYPE_MARKER)) {
+    return null;
+  }
+  cursor += ATTRIBUTED_BODY_TYPE_MARKER.length;
+
+  let length;
+  if (buffer[cursor] === 0x81) {
+    length = buffer.readUInt16LE(cursor + 1);
+    cursor += 3;
+  } else {
+    length = buffer[cursor];
+    cursor += 1;
+  }
+
+  if (!Number.isFinite(length) || length <= 0 || cursor + length > buffer.length) return null;
+  return buffer.subarray(cursor, cursor + length).toString("utf8");
+}
+
+// Prefers the plain text column, falling back to attributedBody extraction
+// when it's empty -- covers both message forms without callers needing to
+// know which one a given row used.
+function readMessageText(row) {
+  if (row.text) return row.text;
+  return extractAttributedBodyText(row.attributedBody);
+}
+
 // With "Messages in iCloud" enabled, a message sent from any of the user's
 // own devices (an iPhone, or someone typing directly into Messages.app on
 // this Mac) syncs into this same chat.db as a normal outbound row -- not
@@ -96,7 +138,7 @@ function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
 
       const rows = db
         .prepare(
-          `SELECT m.ROWID as rowid, m.guid, m.text, m.is_from_me, m.date,
+          `SELECT m.ROWID as rowid, m.guid, m.text, m.attributedBody, m.is_from_me, m.date,
                   h.id as handle
            FROM message m
            LEFT JOIN handle h ON m.handle_id = h.ROWID
@@ -107,10 +149,11 @@ function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
 
       for (const row of rows) {
         lastRowId = Math.max(lastRowId, row.rowid);
+        const text = readMessageText(row);
 
         if (row.is_from_me === 0) {
-          if (row.text) {
-            onInboundMessage({ externalId: row.guid, from: row.handle, body: row.text, kind: "IMESSAGE" });
+          if (text) {
+            onInboundMessage({ externalId: row.guid, from: row.handle, body: text, kind: "IMESSAGE" });
           } else {
             const attachment = getMediaAttachment(db, row.rowid);
             if (attachment) {
@@ -124,13 +167,13 @@ function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
             }
             // unsupported attachment type (or none) -- nothing usable to report yet
           }
-        } else if (row.text && !consumePendingSelfSend(row.handle, row.text)) {
+        } else if (text && !consumePendingSelfSend(row.handle, text)) {
           // Attachments sent from another device (e.g. the iPhone) aren't
           // relayed yet -- only text is handled on this path so far.
           onExternalOutboundMessage({
             externalId: row.guid,
             to: row.handle,
-            body: row.text,
+            body: text,
             kind: "IMESSAGE",
           });
         }
@@ -219,28 +262,36 @@ function watchOutboundStatus(
         findTimer = setTimeout(findRow, OUTBOUND_POLL_MS);
         return;
       }
-      const row = matchAttachment
-        ? db
-            .prepare(
-              `SELECT m.ROWID as rowid, m.is_delivered, m.error
-               FROM message m
-               LEFT JOIN handle h ON m.handle_id = h.ROWID
-               WHERE m.ROWID > ? AND m.is_from_me = 1 AND h.id = ?
-                 AND EXISTS (SELECT 1 FROM message_attachment_join maj WHERE maj.message_id = m.ROWID)
-               ORDER BY m.ROWID ASC
-               LIMIT 1`
-            )
-            .get(baselineRowId, contactHandle)
-        : db
-            .prepare(
-              `SELECT m.ROWID as rowid, m.is_delivered, m.error
-               FROM message m
-               LEFT JOIN handle h ON m.handle_id = h.ROWID
-               WHERE m.ROWID > ? AND m.is_from_me = 1 AND m.text = ? AND h.id = ?
-               ORDER BY m.ROWID ASC
-               LIMIT 1`
-            )
-            .get(baselineRowId, body, contactHandle);
+      let row;
+      if (matchAttachment) {
+        row = db
+          .prepare(
+            `SELECT m.ROWID as rowid, m.is_delivered, m.error
+             FROM message m
+             LEFT JOIN handle h ON m.handle_id = h.ROWID
+             WHERE m.ROWID > ? AND m.is_from_me = 1 AND h.id = ?
+               AND EXISTS (SELECT 1 FROM message_attachment_join maj WHERE maj.message_id = m.ROWID)
+             ORDER BY m.ROWID ASC
+             LIMIT 1`
+          )
+          .get(baselineRowId, contactHandle);
+      } else {
+        // Can't filter by text in SQL -- on newer macOS versions the plain
+        // `text` column is often empty and the real content only exists in
+        // attributedBody, which needs JS-side extraction (see
+        // readMessageText). Candidate rows are few (right after our own
+        // send), so scanning them in JS is cheap.
+        const candidates = db
+          .prepare(
+            `SELECT m.ROWID as rowid, m.text, m.attributedBody, m.is_delivered, m.error
+             FROM message m
+             LEFT JOIN handle h ON m.handle_id = h.ROWID
+             WHERE m.ROWID > ? AND m.is_from_me = 1 AND h.id = ?
+             ORDER BY m.ROWID ASC`
+          )
+          .all(baselineRowId, contactHandle);
+        row = candidates.find((candidate) => readMessageText(candidate) === body);
+      }
 
       if (row) {
         targetRowId = row.rowid;
