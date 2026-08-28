@@ -123,8 +123,17 @@ async function downloadToTempFile(url) {
   } catch {
     // non-URL input (e.g. malformed mediaUrl) -- fall through with no extension
   }
+  // Deliberately NOT os.tmpdir() -- that resolves to a per-process, semi-
+  // private container under /var/folders/.../T/. Confirmed via live testing
+  // that Messages.app hangs forever "loading" an attachment sent from there
+  // (0 outbound attachment rows ever appeared in chat.db), while the exact
+  // same `send (POSIX file ...)` AppleScript command against an identical
+  // file placed on the Desktop delivered instantly end-to-end. Using an
+  // ordinary folder under the home directory instead.
+  const outboxDir = path.join(os.homedir(), "Library", "Application Support", "SendNew Agent", "outbox");
+  fs.mkdirSync(outboxDir, { recursive: true });
   const tempPath = path.join(
-    os.tmpdir(),
+    outboxDir,
     `sendnew-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`
   );
   fs.writeFileSync(tempPath, buffer);
