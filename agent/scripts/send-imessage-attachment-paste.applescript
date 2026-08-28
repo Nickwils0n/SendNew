@@ -7,9 +7,16 @@
 -- put a real file reference on the clipboard (the same thing Finder's Cmd-C
 -- does), bring the right conversation to the front via the imessage: URL
 -- scheme (handled by the caller before this script runs), then paste and
--- send via keystrokes. Requires the same Accessibility permission already
--- granted for FaceTime window-title reading (System Events driving another
--- app's UI).
+-- send via the real Edit > Paste menu command. Requires the same
+-- Accessibility permission already granted for FaceTime window-title
+-- reading (System Events driving another app's UI).
+--
+-- Uses the Edit menu's Paste item rather than a simulated Cmd-V keystroke --
+-- confirmed via live testing that the clipboard copy itself works fine
+-- (clipboard info shows a real file alias present) even with Messages
+-- already frontmost, but the synthetic keystroke wasn't actually landing as
+-- a paste in the compose field. Driving the real menu command is a more
+-- reliable way to trigger the same action a manual click would.
 on run argv
     set targetHandle to item 1 of argv
     set filePath to item 2 of argv
@@ -23,7 +30,8 @@ on run argv
     tell application "System Events"
         tell process "Messages"
             set frontmost to true
-            keystroke "v" using {command down}
+            delay 0.3
+            click menu item "Paste" of menu "Edit" of menu bar 1
             delay 2
             keystroke return
         end tell
