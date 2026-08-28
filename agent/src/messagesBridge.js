@@ -39,13 +39,23 @@ async function sendIMessage(to, body) {
 // log/report them -- a mismatch here (e.g. a tiny byte count, or a
 // content-type that isn't actually an image) is exactly the kind of silent
 // failure that AppleScript's `send` won't itself ever surface as an error.
+// Messages.app's `send (POSIX file ...)` command hands control back to
+// AppleScript as soon as it's *queued* the send, not once it's actually
+// finished reading the file into its own Attachments store -- that copy
+// happens slightly after, out-of-band. Deleting the temp file immediately
+// on return raced that copy and lost every time (confirmed: zero outbound
+// attachment rows had ever appeared in chat.db), leaving Messages.app stuck
+// trying to attach a file that no longer existed. Give it a few seconds of
+// grace before cleaning up.
+const ATTACHMENT_CLEANUP_DELAY_MS = 5000;
+
 async function sendIMessageAttachment(to, mediaUrl) {
   const { localPath, diagnostics } = await downloadToTempFile(mediaUrl);
   try {
     await runAppleScript("send-imessage-attachment.applescript", [to, localPath]);
     return diagnostics;
   } finally {
-    fs.unlink(localPath, () => {});
+    setTimeout(() => fs.unlink(localPath, () => {}), ATTACHMENT_CLEANUP_DELAY_MS);
   }
 }
 
