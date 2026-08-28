@@ -42,6 +42,11 @@ router.get("/conversations/:id/messages", asyncHandler(async (req, res) => {
 // Send an iMessage/SMS out through a specific device (Mac mini).
 router.post("/send", asyncHandler(async (req, res) => {
   const { deviceId, to, body, mediaUrl, kind } = req.body;
+  console.log(
+    `[POST /api/send] company=${req.company.id} deviceId=${deviceId} to=${to} ` +
+      `body=${body !== undefined ? JSON.stringify(body) : "(none)"} ` +
+      `mediaUrl=${mediaUrl || "(none)"} kind=${kind || "(default)"}`
+  );
   if (!deviceId || !to || (!body && !mediaUrl)) {
     return res.status(400).json({ error: "deviceId, to, and body or mediaUrl are required" });
   }
