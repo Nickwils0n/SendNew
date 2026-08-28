@@ -10,12 +10,12 @@ const CALL_WATCH_POLL_MS = 1500;
 const CALL_WATCH_TIMEOUT_MS = 3 * 60 * 1000; // give up watching after 3 minutes either way
 const CALL_WATCH_END_CONFIRM_POLLS = 2; // require 2 consecutive "no window" reads before declaring it over
 
-function runAppleScript(scriptFile, args) {
+function runAppleScript(scriptFile, args, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     execFile(
       "osascript",
       [path.join(SCRIPTS_DIR, scriptFile), ...args],
-      { timeout: 15000 },
+      { timeout: timeoutMs },
       (error, stdout, stderr) => {
         if (error) {
           reject(new Error(stderr?.trim() || error.message));
@@ -40,19 +40,27 @@ async function sendIMessage(to, body) {
 // silent failure that AppleScript's `send` won't itself ever surface as an
 // error.
 //
-// Deliberately does NOT delete the file itself. Messages.app's
-// `send (POSIX file ...)` command hands control back to AppleScript as soon
-// as it's *queued* the send, not once it's actually finished reading the
-// file into its own Attachments store -- that copy happens slightly after,
-// out-of-band, and there's no callback for "done reading it." Any fixed
-// delay here is a guess at how long that takes; deleting too early leaves
-// Messages.app stuck trying to attach a file that's already gone (a real,
-// confirmed failure mode -- see git history). The caller owns cleanup and
+// Deliberately does NOT delete the file itself. The caller owns cleanup and
 // should only delete the file once chat.db has actually confirmed
 // Messages.app created the outgoing row (or definitively given up waiting).
+//
+// Confirmed via live testing that AppleScript's own `send (POSIX file ...)`
+// command hangs indefinitely mid-upload on this machine -- true regardless
+// of file format (both PNG and HEIC got stuck the same way) -- while
+// manually dragging the identical file into the compose window and hitting
+// send delivers instantly. Drag-and-drop and clipboard-paste attach a file
+// the same way under the hood, so this drives that path instead of the
+// scripting `send` command: bring the right conversation to the front via
+// the imessage: URL scheme, put a real file reference on the clipboard (the
+// same thing Finder's Cmd-C does), then paste and send via keystrokes (see
+// send-imessage-attachment-paste.applescript). Slower and more fragile than
+// a single scripting command, but it's the one path that's actually been
+// observed to work end-to-end on this Mac.
 async function sendIMessageAttachment(to, mediaUrl) {
   const { localPath, diagnostics } = await downloadToTempFile(mediaUrl);
-  await runAppleScript("send-imessage-attachment.applescript", [to, localPath]);
+  await shell.openExternal(`imessage:${encodeURIComponent(to)}`);
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  await runAppleScript("send-imessage-attachment-paste.applescript", [to, localPath], 30000);
   return { localPath, diagnostics };
 }
 
