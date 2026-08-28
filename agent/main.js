@@ -124,8 +124,13 @@ function logTraffic({ direction, kind, contact, body, status, error }) {
 }
 
 function createTray() {
+  // An empty nativeImage renders as literally nothing on macOS -- there was
+  // never anything visible to click. setTitle() puts real text in the menu
+  // bar regardless of icon rendering, which is what actually needs to be
+  // clickable here (the icon itself is cosmetic, not load-bearing).
   const icon = nativeImage.createEmpty();
   tray = new Tray(icon);
+  tray.setTitle("SendNew");
   tray.setToolTip("SendNew Agent");
   refreshTrayMenu();
 }
