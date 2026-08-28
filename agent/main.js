@@ -209,9 +209,12 @@ function startAgent(token, device) {
       if (!isAttachment && msg.body) registerPendingSelfSend(msg.to, msg.body);
 
       let downloadDiagnostics = null;
+      let attachmentLocalPath = null;
       try {
         if (isAttachment) {
-          downloadDiagnostics = await sendIMessageAttachment(msg.to, msg.mediaUrl);
+          const result = await sendIMessageAttachment(msg.to, msg.mediaUrl);
+          downloadDiagnostics = result.diagnostics;
+          attachmentLocalPath = result.localPath;
         } else {
           await sendIMessage(msg.to, msg.body);
         }
@@ -232,6 +235,17 @@ function startAgent(token, device) {
             matchAttachment: isAttachment,
           },
           (event) => {
+            // Only delete the downloaded attachment file once chat.db has
+            // actually told us one way or the other whether Messages.app
+            // picked it up -- deleting on any fixed timer instead risks
+            // racing Messages.app's own (undocumented) delay in reading the
+            // file into its Attachments store, which previously caused every
+            // outbound attachment to get stuck forever "loading" and never
+            // deliver.
+            if (attachmentLocalPath && (event.type === "confirmed" || event.type === "not_confirmed")) {
+              fs.unlink(attachmentLocalPath, () => {});
+              attachmentLocalPath = null;
+            }
             if (event.type === "confirmed") {
               socket.send({ type: "status_update", messageId: msg.messageId, status: "SENT" });
               logTraffic({
@@ -267,6 +281,7 @@ function startAgent(token, device) {
           }
         );
       } catch (err) {
+        if (attachmentLocalPath) fs.unlink(attachmentLocalPath, () => {});
         socket.send({
           type: "status_update",
           messageId: msg.messageId,

@@ -33,30 +33,27 @@ async function sendIMessage(to, body) {
 
 // mediaUrl from the CRM is a remote URL (something it hosts), not a path on
 // this Mac -- Messages.app's AppleScript `send` needs an actual local
-// POSIX file, so this downloads it to a temp file first and cleans up after,
-// regardless of whether the send succeeds. Returns download diagnostics
-// (byte count, actual content-type, what the server claimed) so a caller can
-// log/report them -- a mismatch here (e.g. a tiny byte count, or a
-// content-type that isn't actually an image) is exactly the kind of silent
-// failure that AppleScript's `send` won't itself ever surface as an error.
-// Messages.app's `send (POSIX file ...)` command hands control back to
-// AppleScript as soon as it's *queued* the send, not once it's actually
-// finished reading the file into its own Attachments store -- that copy
-// happens slightly after, out-of-band. Deleting the temp file immediately
-// on return raced that copy and lost every time (confirmed: zero outbound
-// attachment rows had ever appeared in chat.db), leaving Messages.app stuck
-// trying to attach a file that no longer existed. Give it a few seconds of
-// grace before cleaning up.
-const ATTACHMENT_CLEANUP_DELAY_MS = 5000;
-
+// POSIX file, so this downloads it to a temp file first. Returns download
+// diagnostics (byte count, actual content-type, what the server claimed) so
+// a caller can log/report them -- a mismatch here (e.g. a tiny byte count,
+// or a content-type that isn't actually an image) is exactly the kind of
+// silent failure that AppleScript's `send` won't itself ever surface as an
+// error.
+//
+// Deliberately does NOT delete the file itself. Messages.app's
+// `send (POSIX file ...)` command hands control back to AppleScript as soon
+// as it's *queued* the send, not once it's actually finished reading the
+// file into its own Attachments store -- that copy happens slightly after,
+// out-of-band, and there's no callback for "done reading it." Any fixed
+// delay here is a guess at how long that takes; deleting too early leaves
+// Messages.app stuck trying to attach a file that's already gone (a real,
+// confirmed failure mode -- see git history). The caller owns cleanup and
+// should only delete the file once chat.db has actually confirmed
+// Messages.app created the outgoing row (or definitively given up waiting).
 async function sendIMessageAttachment(to, mediaUrl) {
   const { localPath, diagnostics } = await downloadToTempFile(mediaUrl);
-  try {
-    await runAppleScript("send-imessage-attachment.applescript", [to, localPath]);
-    return diagnostics;
-  } finally {
-    setTimeout(() => fs.unlink(localPath, () => {}), ATTACHMENT_CLEANUP_DELAY_MS);
-  }
+  await runAppleScript("send-imessage-attachment.applescript", [to, localPath]);
+  return { localPath, diagnostics };
 }
 
 // iMessage voice messages are stored as .caf (Apple's Core Audio Format),
