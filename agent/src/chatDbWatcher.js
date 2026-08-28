@@ -8,8 +8,11 @@ const POLL_INTERVAL_MS = 2000;
 const OUTBOUND_POLL_MS = 2000;
 // chat.db should show the outgoing row almost instantly if Messages.app
 // genuinely accepted the send -- this is deliberately much shorter than the
-// delivery-resolution window below.
+// delivery-resolution window below. Attachments get longer: Messages.app has
+// to actually copy the file into its own Attachments folder and register it
+// before the row exists, which is measurably slower than just writing text.
 const CONFIRM_TIMEOUT_MS = 8000;
+const CONFIRM_TIMEOUT_ATTACHMENT_MS = 20000;
 const RESOLVE_TIMEOUT_MS = 30000;
 
 function openReadOnly() {
@@ -245,7 +248,7 @@ function watchOutboundStatus(
   let targetRowId = null;
   let findTimer = null;
   let statusTimer = null;
-  const confirmDeadline = Date.now() + CONFIRM_TIMEOUT_MS;
+  const confirmDeadline = Date.now() + (matchAttachment ? CONFIRM_TIMEOUT_ATTACHMENT_MS : CONFIRM_TIMEOUT_MS);
   const resolveDeadline = Date.now() + RESOLVE_TIMEOUT_MS;
 
   function findRow() {
