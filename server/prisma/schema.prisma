@@ -88,6 +88,7 @@ enum MessageKind {
   SMS
   FACETIME_AUDIO
   FACETIME_VIDEO
+  AUDIO_MESSAGE
 }
 
 model Message {

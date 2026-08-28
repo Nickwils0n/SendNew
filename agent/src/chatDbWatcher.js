@@ -44,10 +44,14 @@ function consumePendingSelfSend(contactHandle, body) {
 }
 
 // Attachment rows have no `text`; the actual file lives at a local path
-// recorded in chat.db's own attachment table. Only image attachments are
-// handled right now -- other types (video, vCards, etc.) are silently
-// skipped, a documented gap rather than an oversight.
-function getImageAttachment(db, messageRowId) {
+// recorded in chat.db's own attachment table. Only image and audio
+// attachments are handled right now -- other types (video, vCards, etc.) are
+// silently skipped, a documented gap rather than an oversight. Voice
+// messages arrive here as an audio attachment like any other -- chat.db's
+// own audio-message flag isn't needed since we treat any audio/* the same
+// way regardless of whether it was a tap-to-record bubble or a dragged-in
+// audio file.
+function getMediaAttachment(db, messageRowId) {
   const row = db
     .prepare(
       `SELECT a.filename, a.mime_type
@@ -58,12 +62,16 @@ function getImageAttachment(db, messageRowId) {
        LIMIT 1`
     )
     .get(messageRowId);
-  if (!row?.filename || !row.mime_type?.startsWith("image/")) return null;
+  if (!row?.filename || !row.mime_type) return null;
+
+  const isImage = row.mime_type.startsWith("image/");
+  const isAudio = row.mime_type.startsWith("audio/");
+  if (!isImage && !isAudio) return null;
 
   const filePath = row.filename.startsWith("~")
     ? path.join(os.homedir(), row.filename.slice(1))
     : row.filename;
-  return { filePath, mimeType: row.mime_type };
+  return { filePath, mimeType: row.mime_type, isAudio };
 }
 
 // Watches chat.db for both inbound replies and outbound messages sent from
@@ -104,7 +112,7 @@ function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
           if (row.text) {
             onInboundMessage({ externalId: row.guid, from: row.handle, body: row.text, kind: "IMESSAGE" });
           } else {
-            const attachment = getImageAttachment(db, row.rowid);
+            const attachment = getMediaAttachment(db, row.rowid);
             if (attachment) {
               onInboundMessage({
                 externalId: row.guid,
@@ -114,11 +122,11 @@ function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
                 attachment,
               });
             }
-            // non-image attachment (or none) -- nothing usable to report yet
+            // unsupported attachment type (or none) -- nothing usable to report yet
           }
         } else if (row.text && !consumePendingSelfSend(row.handle, row.text)) {
-          // Image attachments sent from another device (e.g. the iPhone)
-          // aren't relayed yet -- only text is handled on this path so far.
+          // Attachments sent from another device (e.g. the iPhone) aren't
+          // relayed yet -- only text is handled on this path so far.
           onExternalOutboundMessage({
             externalId: row.guid,
             to: row.handle,

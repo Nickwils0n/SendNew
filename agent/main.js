@@ -1,6 +1,7 @@
 require("dotenv").config();
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } = require("electron");
 const path = require("path");
+const fs = require("fs");
 const keytar = require("keytar");
 
 const { AgentSocket } = require("./src/wsClient");
@@ -8,6 +9,7 @@ const {
   sendIMessage,
   sendIMessageAttachment,
   uploadInboundAttachment,
+  transcodeAudioToM4a,
   startFaceTime,
   watchFaceTimeCall,
 } = require("./src/messagesBridge");
@@ -306,18 +308,39 @@ function startAgent(token, device) {
         // Binary upload doesn't fit the WS JSON protocol -- goes over its
         // own authenticated HTTP route instead; the server creates the
         // Message/webhook delivery once the upload succeeds.
-        uploadInboundAttachment(SERVER_HTTP_URL, token, {
-          contactHandle: inbound.from,
-          externalId: inbound.externalId,
-          filePath: inbound.attachment.filePath,
-          mimeType: inbound.attachment.mimeType,
-        })
-          .then(() => {
-            logTraffic({ direction: "in", kind: "imessage", contact: inbound.from, body: "[image]", status: "received" });
-          })
-          .catch((err) => {
+        (async () => {
+          let uploadPath = inbound.attachment.filePath;
+          let uploadMimeType = inbound.attachment.mimeType;
+          let tempFileToClean = null;
+          try {
+            if (inbound.attachment.isAudio) {
+              // Voice messages are .caf on disk -- most browsers besides
+              // Safari can't play that, so transcode to a universally
+              // supported format before uploading. Never touches the
+              // original file, which belongs to Messages.app's own store.
+              uploadPath = await transcodeAudioToM4a(inbound.attachment.filePath);
+              uploadMimeType = "audio/mp4";
+              tempFileToClean = uploadPath;
+            }
+            await uploadInboundAttachment(SERVER_HTTP_URL, token, {
+              contactHandle: inbound.from,
+              externalId: inbound.externalId,
+              filePath: uploadPath,
+              mimeType: uploadMimeType,
+            });
+            logTraffic({
+              direction: "in",
+              kind: "imessage",
+              contact: inbound.from,
+              body: inbound.attachment.isAudio ? "[voice message]" : "[image]",
+              status: "received",
+            });
+          } catch (err) {
             socket.send({ type: "log", level: "error", message: `attachment upload failed: ${err.message}` });
-          });
+          } finally {
+            if (tempFileToClean) fs.unlink(tempFileToClean, () => {});
+          }
+        })();
         return;
       }
       socket.send({ type: "inbound_message", ...inbound });

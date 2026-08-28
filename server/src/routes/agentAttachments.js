@@ -40,6 +40,7 @@ router.post(
 
     const mimeType = req.header("content-type") || "application/octet-stream";
     const mediaUrl = await uploadAttachment(req.body, mimeType);
+    const kind = mimeType.startsWith("audio/") ? "AUDIO_MESSAGE" : "IMESSAGE";
 
     const { conversation, isNewConversation } = await upsertConversation(
       deviceId,
@@ -51,7 +52,7 @@ router.post(
         conversationId: conversation.id,
         deviceId,
         direction: "INBOUND",
-        kind: "IMESSAGE",
+        kind,
         body: null,
         mediaUrl,
         status: "RECEIVED",

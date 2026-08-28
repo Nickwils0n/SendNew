@@ -13,6 +13,7 @@
   "dependencies": {
     "better-sqlite3": "^11.3.0",
     "dotenv": "^16.4.5",
+    "ffmpeg-static": "^5.2.0",
     "keytar": "^7.9.0",
     "ws": "^8.18.0"
   },
@@ -24,6 +25,7 @@
   "build": {
     "appId": "com.sendnew.agent",
     "productName": "SendNew Agent",
+    "asarUnpack": ["node_modules/ffmpeg-static/**"],
     "mac": {
       "category": "public.app-category.business",
       "target": ["dmg"],

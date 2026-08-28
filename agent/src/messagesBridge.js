@@ -3,6 +3,7 @@ const path = require("path");
 const os = require("os");
 const fs = require("fs");
 const { shell } = require("electron");
+const ffmpegPath = require("ffmpeg-static");
 
 const SCRIPTS_DIR = path.join(__dirname, "..", "scripts");
 const CALL_WATCH_POLL_MS = 1500;
@@ -41,6 +42,34 @@ async function sendIMessageAttachment(to, mediaUrl) {
   } finally {
     fs.unlink(localPath, () => {});
   }
+}
+
+// iMessage voice messages are stored as .caf (Apple's Core Audio Format),
+// which most browsers besides Safari can't play in an <audio> tag. Converts
+// to AAC-in-MP4 (.m4a, MIME type audio/mp4) using a bundled ffmpeg binary
+// (ffmpeg-static -- no separate install needed on the Mac mini) so the CRM
+// gets something universally playable. Output always goes to a fresh temp
+// file; never touches the original attachment, which belongs to
+// Messages.app's own store.
+function transcodeAudioToM4a(inputPath) {
+  return new Promise((resolve, reject) => {
+    const outputPath = path.join(
+      os.tmpdir(),
+      `sendnew-audio-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.m4a`
+    );
+    execFile(
+      ffmpegPath,
+      ["-y", "-i", inputPath, "-c:a", "aac", "-b:a", "64k", outputPath],
+      { timeout: 30000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(stderr?.trim() || error.message));
+          return;
+        }
+        resolve(outputPath);
+      }
+    );
+  });
 }
 
 async function downloadToTempFile(url) {
@@ -156,6 +185,7 @@ module.exports = {
   sendIMessage,
   sendIMessageAttachment,
   uploadInboundAttachment,
+  transcodeAudioToM4a,
   startFaceTime,
   watchFaceTimeCall,
 };

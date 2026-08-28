@@ -18,34 +18,43 @@ provisioning tooling, not the public website.
   it does not treat `mediaUrl` as anything Apple-specific.
 - `POST /api/facetime` `{ deviceId, to, video? }` — start a FaceTime call.
 
-## Image attachments
+## Image & voice message attachments
 
-Inbound and outbound images both go through the same `mediaUrl` field —
-there's no separate attachment endpoint on the company-facing API.
+Inbound and outbound images/voice messages both go through the same
+`mediaUrl` field — there's no separate attachment endpoint on the
+company-facing API.
 
-- **Outbound** (send an image): pass `mediaUrl` on `POST /api/send` pointing
-  at wherever your CRM already hosts the image. The agent downloads it to a
-  temp file, sends it via Messages.app, and deletes the temp file after.
-- **Inbound** (a contact sends an image): the agent uploads it to this server
-  (`POST /agent/attachments`, device-authenticated), which saves it to a
-  Railway Volume and serves it back out at
+- **Outbound** (send an image or audio file): pass `mediaUrl` on
+  `POST /api/send` pointing at wherever your CRM already hosts the file. The
+  agent downloads it to a temp file, sends it via Messages.app, and deletes
+  the temp file after.
+- **Inbound** (a contact sends an image or voice message): the agent uploads
+  it to this server (`POST /agent/attachments`, device-authenticated), which
+  saves it to a Railway Volume and serves it back out at
   `<PUBLIC_URL_BASE>/media/<filename>` (see `ATTACHMENTS_DIR`/`PUBLIC_URL_BASE`
   in `server/.env.example`). That URL arrives as `mediaUrl` on the normal
   `message.inbound` webhook, same as any other inbound message, just with
   `body: null` and `mediaUrl` populated instead.
+- **Voice messages specifically**: iMessage stores these as `.caf` on disk,
+  which most browsers besides Safari can't play. The agent transcodes to
+  AAC-in-MP4 (`.m4a`) before uploading, so `mediaUrl` always points at a
+  universally-playable `audio/mp4` file — you never receive a raw `.caf`.
+  These arrive with `kind: "AUDIO_MESSAGE"` (vs. `"IMESSAGE"` for images) on
+  the webhook payload's `message` object, so your renderer can pick an
+  `<audio>` player vs. an `<img>` without needing to sniff the file.
 
 **Current limitations, not yet built:**
-- Only image attachments are handled (`image/*` MIME types). Video, audio
-  clips, and other file types are silently skipped — nothing is stored or
-  delivered for them yet.
-- An image sent from another device on the same Apple ID (the user's
-  iPhone, or Messages.app used directly on the Mac — see
+- Only image and audio attachments are handled (`image/*` and `audio/*`
+  MIME types). Video, vCards, and other file types are silently skipped —
+  nothing is stored or delivered for them yet.
+- An image or voice message sent from another device on the same Apple ID
+  (the user's iPhone, or Messages.app used directly on the Mac — see
   `message.sent_from_other_device` above) isn't uploaded/relayed yet, only
   text is handled on that path so far.
 - If `ATTACHMENTS_DIR`/`PUBLIC_URL_BASE` aren't configured on the server,
-  inbound image uploads fail outright (the agent logs the error) — text
+  inbound attachment uploads fail outright (the agent logs the error) — text
   messaging is unaffected either way.
-- Served images have no per-request auth — an unguessable filename is the
+- Served files have no per-request auth — an unguessable filename is the
   only thing standing between the URL and the file. Fine for this project's
   current scale; revisit if that's not an acceptable tradeoff later.
 
