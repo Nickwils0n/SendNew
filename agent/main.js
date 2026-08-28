@@ -128,6 +128,12 @@ function logTraffic({ direction, kind, contact, body, status, error }) {
   state.traffic.unshift(entry);
   if (state.traffic.length > MAX_TRAFFIC_ENTRIES) state.traffic.length = MAX_TRAFFIC_ENTRIES;
   statusWindow?.webContents.send("status:traffic", entry);
+
+  const arrow = direction === "in" ? "<-" : status === "failed" ? "x " : "->";
+  const line = `[traffic] ${arrow} ${contact} (${kind}) ${status}${entry.body ? `: ${entry.body}` : ""}`;
+  if (status === "failed") console.error(line, error || "");
+  else console.log(line);
+
   return entry;
 }
 
@@ -178,12 +184,14 @@ function startAgent(token, device) {
 
   socket = new AgentSocket(SERVER_HTTP_URL, token, {
     onOpen: () => {
+      console.log("[agent] connected to", SERVER_HTTP_URL);
       state.connected = true;
       state.lastError = null;
       refreshTrayMenu();
       pushStatus();
     },
     onClose: () => {
+      console.log("[agent] disconnected, will retry");
       state.connected = false;
       refreshTrayMenu();
       pushStatus();
