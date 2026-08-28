@@ -7,20 +7,44 @@ function signPayload(rawBody, secret) {
 
 async function deliverToCompanyWebhook(companyId, payload) {
   const company = await prisma.company.findUnique({ where: { id: companyId } });
-  if (!company || !company.webhookUrl) return;
+  if (!company || !company.webhookUrl) {
+    console.warn(`webhook skipped for company ${companyId}: no webhookUrl configured`);
+    return;
+  }
 
   const rawBody = JSON.stringify(payload);
   try {
-    await fetch(company.webhookUrl, {
+    const res = await fetch(company.webhookUrl, {
       method: "POST",
+      // A signed POST that gets redirected silently loses its body/method
+      // under fetch's default redirect-following behavior (a 301/302 turns
+      // it into a bodyless GET) -- that's a delivery failure, not something
+      // to follow blindly. Treat any redirect response as an explicit error
+      // instead.
+      redirect: "manual",
       headers: {
         "content-type": "application/json",
         "x-sendnew-signature": signPayload(rawBody, company.webhookSecret),
       },
       body: rawBody,
     });
+
+    if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) {
+      console.error(
+        `webhook delivery for company ${companyId} (event ${payload.event}) was redirected -- ` +
+          `fix the stored webhookUrl (${company.webhookUrl}) to point directly at its final destination`
+      );
+      return;
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error(
+        `webhook delivery for company ${companyId} (event ${payload.event}) rejected: ` +
+          `HTTP ${res.status} ${body.slice(0, 500)}`
+      );
+    }
   } catch (err) {
-    console.error(`webhook delivery failed for company ${companyId}:`, err.message);
+    console.error(`webhook delivery failed for company ${companyId} (event ${payload.event}):`, err.message);
   }
 }
 
