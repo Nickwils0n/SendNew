@@ -47,7 +47,7 @@ async function sendIMessage(to, body) {
 // attachment rows had ever appeared in chat.db), leaving Messages.app stuck
 // trying to attach a file that no longer existed. Give it a few seconds of
 // grace before cleaning up.
-const ATTACHMENT_CLEANUP_DELAY_MS = 10 * 60 * 1000; // TEMP: widened for live diagnosis, see chat log
+const ATTACHMENT_CLEANUP_DELAY_MS = 5000;
 
 async function sendIMessageAttachment(to, mediaUrl) {
   const { localPath, diagnostics } = await downloadToTempFile(mediaUrl);
@@ -128,10 +128,9 @@ async function downloadToTempFile(url) {
   // that Messages.app hangs forever "loading" an attachment sent from there
   // (0 outbound attachment rows ever appeared in chat.db), while the exact
   // same `send (POSIX file ...)` AppleScript command against an identical
-  // file placed on the Desktop delivered instantly end-to-end. Using an
-  // ordinary folder under the home directory instead.
-  const outboxDir = path.join(os.homedir(), "Library", "Application Support", "SendNew Agent", "outbox");
-  fs.mkdirSync(outboxDir, { recursive: true });
+  // file placed on the Desktop delivered instantly end-to-end. Downloads is
+  // a plain, ordinary user folder with no special container/sandbox status.
+  const outboxDir = path.join(os.homedir(), "Downloads");
   const tempPath = path.join(
     outboxDir,
     `sendnew-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`
