@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, powerSaveBlocker } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const keytar = require("keytar");
@@ -457,6 +457,16 @@ ipcMain.handle("auth:register", async (_event, { setupCode, label }) => {
 });
 
 app.whenReady().then(async () => {
+  // This runs as a background menu-bar-only app (no visible window --
+  // LSUIElement in package.json) whose entire job is a setInterval loop
+  // polling chat.db every 2 seconds. Confirmed via live testing: after
+  // sitting idle for a while (no crash, process still running), it silently
+  // stops noticing new messages until restarted -- classic macOS App Nap
+  // behavior, which throttles background timers/IO for apps it decides are
+  // idle. This tells the OS never to nap this process, the same mechanism
+  // media/download apps use to keep running correctly while backgrounded.
+  powerSaveBlocker.start("prevent-app-suspension");
+
   const existingToken = await keytar.getPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT);
   if (existingToken) {
     startAgent(existingToken);
