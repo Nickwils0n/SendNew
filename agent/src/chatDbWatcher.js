@@ -13,6 +13,14 @@ const OUTBOUND_POLL_MS = 2000;
 // before the row exists, which is measurably slower than just writing text.
 const CONFIRM_TIMEOUT_MS = 8000;
 const CONFIRM_TIMEOUT_ATTACHMENT_MS = 20000;
+// A message body containing a URL triggers Messages.app's rich link-preview
+// data detector (fetching the page's Open Graph metadata/thumbnail before
+// finalizing the send) -- confirmed via live testing that this routinely
+// pushes row creation past the plain-text confirm window, falsely reporting
+// FAILED on messages that actually delivered fine. Give those the same
+// longer allowance as attachments.
+const CONFIRM_TIMEOUT_LINK_MS = 20000;
+const URL_PATTERN = /https?:\/\/\S+/i;
 const RESOLVE_TIMEOUT_MS = 30000;
 
 function openReadOnly() {
@@ -259,7 +267,12 @@ function watchOutboundStatus(
   let targetRowId = null;
   let findTimer = null;
   let statusTimer = null;
-  const confirmDeadline = Date.now() + (matchAttachment ? CONFIRM_TIMEOUT_ATTACHMENT_MS : CONFIRM_TIMEOUT_MS);
+  const confirmTimeoutMs = matchAttachment
+    ? CONFIRM_TIMEOUT_ATTACHMENT_MS
+    : URL_PATTERN.test(body || "")
+    ? CONFIRM_TIMEOUT_LINK_MS
+    : CONFIRM_TIMEOUT_MS;
+  const confirmDeadline = Date.now() + confirmTimeoutMs;
   const resolveDeadline = Date.now() + RESOLVE_TIMEOUT_MS;
 
   function findRow() {
