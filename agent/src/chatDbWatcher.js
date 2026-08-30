@@ -35,32 +35,46 @@ function openReadOnly() {
 // blob. Apple doesn't document this format; the byte pattern below (an
 // "NSString" marker followed by a fixed 5-byte type marker, then a length
 // prefix and the UTF-8 text) is reverse-engineered but a stable, widely-used
-// pattern across other chat.db tooling. Returns null rather than guessing if
-// the structure doesn't match what's expected.
+// pattern across other chat.db tooling.
+//
+// A message containing a URL gets extra structure in this blob beyond a
+// plain string -- Messages' link-detection attaches an attribute run (and
+// likely a duplicate NSURL/NSString for the detected link) around the
+// message text, which can put an earlier "NSString"-tagged object in the
+// buffer that isn't immediately followed by our expected type marker.
+// Confirmed via live testing that bailing out on the first mismatch (the
+// original behavior here) returns null for exactly these messages -- the
+// real text's marker is simply further into the buffer. Keep scanning
+// subsequent occurrences instead of giving up on the first one.
 const ATTRIBUTED_BODY_TYPE_MARKER = Buffer.from([0x01, 0x94, 0x84, 0x01, 0x2b]);
 
 function extractAttributedBodyText(buffer) {
   if (!buffer || buffer.length === 0) return null;
-  const markerIndex = buffer.indexOf("NSString", 0, "latin1");
-  if (markerIndex === -1) return null;
 
-  let cursor = markerIndex + "NSString".length;
-  if (!buffer.subarray(cursor, cursor + ATTRIBUTED_BODY_TYPE_MARKER.length).equals(ATTRIBUTED_BODY_TYPE_MARKER)) {
-    return null;
+  let searchFrom = 0;
+  while (true) {
+    const markerIndex = buffer.indexOf("NSString", searchFrom, "latin1");
+    if (markerIndex === -1) return null;
+
+    const cursor = markerIndex + "NSString".length;
+    if (buffer.subarray(cursor, cursor + ATTRIBUTED_BODY_TYPE_MARKER.length).equals(ATTRIBUTED_BODY_TYPE_MARKER)) {
+      let textCursor = cursor + ATTRIBUTED_BODY_TYPE_MARKER.length;
+      let length;
+      if (buffer[textCursor] === 0x81) {
+        length = buffer.readUInt16LE(textCursor + 1);
+        textCursor += 3;
+      } else {
+        length = buffer[textCursor];
+        textCursor += 1;
+      }
+
+      if (Number.isFinite(length) && length > 0 && textCursor + length <= buffer.length) {
+        return buffer.subarray(textCursor, textCursor + length).toString("utf8");
+      }
+    }
+
+    searchFrom = markerIndex + "NSString".length;
   }
-  cursor += ATTRIBUTED_BODY_TYPE_MARKER.length;
-
-  let length;
-  if (buffer[cursor] === 0x81) {
-    length = buffer.readUInt16LE(cursor + 1);
-    cursor += 3;
-  } else {
-    length = buffer[cursor];
-    cursor += 1;
-  }
-
-  if (!Number.isFinite(length) || length <= 0 || cursor + length > buffer.length) return null;
-  return buffer.subarray(cursor, cursor + length).toString("utf8");
 }
 
 // Prefers the plain text column, falling back to attributedBody extraction
