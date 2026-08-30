@@ -21,7 +21,16 @@ const CONFIRM_TIMEOUT_ATTACHMENT_MS = 20000;
 // longer allowance as attachments.
 const CONFIRM_TIMEOUT_LINK_MS = 20000;
 const URL_PATTERN = /https?:\/\/\S+/i;
-const RESOLVE_TIMEOUT_MS = 30000;
+// Confirmed via live testing (checking chat.db well after the fact) that
+// Apple's delivery receipt round-trip -- recipient device -> Apple's
+// servers -> back to this Mac's chat.db -- can genuinely take longer than
+// 30s even for a message the recipient visibly received right away. Once
+// this window closes without seeing is_delivered flip, we stop watching for
+// good and the message is stuck showing SENT forever even though it was
+// truly delivered. Polling already stops the instant it resolves either
+// way, so widening this only delays how long a message that *never* gets a
+// receipt (SMS, or some iMessage sends) sits "pending" before we give up.
+const RESOLVE_TIMEOUT_MS = 120000;
 
 function openReadOnly() {
   if (!fs.existsSync(CHAT_DB_PATH)) return null;
