@@ -127,6 +127,14 @@ function consumePendingSelfSend(contactHandle, body) {
 // own audio-message flag isn't needed since we treat any audio/* the same
 // way regardless of whether it was a tap-to-record bubble or a dragged-in
 // audio file.
+//
+// A Live Photo is really two joined attachments on the same message -- a
+// still HEIC image plus a companion .mov motion clip. Ordering by ROWID
+// alone could land on the video half first, which isn't image/* or audio/*
+// and would silently skip the whole message as an unsupported type (this is
+// why Live Photos weren't coming through at all). Explicitly prefer an
+// image/* attachment when one exists, so a Live Photo comes through as its
+// still-photo component instead of being dropped.
 function getMediaAttachment(db, messageRowId) {
   const row = db
     .prepare(
@@ -134,7 +142,7 @@ function getMediaAttachment(db, messageRowId) {
        FROM message_attachment_join maj
        JOIN attachment a ON maj.attachment_id = a.ROWID
        WHERE maj.message_id = ?
-       ORDER BY a.ROWID ASC
+       ORDER BY (CASE WHEN a.mime_type LIKE 'image/%' THEN 0 ELSE 1 END), a.ROWID ASC
        LIMIT 1`
     )
     .get(messageRowId);
