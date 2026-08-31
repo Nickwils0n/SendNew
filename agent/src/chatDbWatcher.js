@@ -418,4 +418,9 @@ module.exports = {
   watchOutboundStatus,
   registerPendingSelfSend,
   CHAT_DB_PATH,
+  // Exported for live diagnostics only (see chat log) -- not used by any
+  // other module.
+  extractAttributedBodyText,
+  readMessageText,
+  openReadOnly,
 };
