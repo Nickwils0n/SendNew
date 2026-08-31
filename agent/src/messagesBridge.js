@@ -92,6 +92,35 @@ function transcodeAudioToM4a(inputPath) {
   });
 }
 
+// iPhones default to capturing photos as HEIC, which most browsers besides
+// Safari/WebKit can't render in an <img> tag at all -- confirmed via live
+// testing that a real inbound photo showed up as a blank placeholder on the
+// CRM's web UI, same failure mode .caf voice messages had before the audio
+// transcode above. Converts to JPEG using macOS's built-in `sips` tool (no
+// bundled dependency needed, unlike ffmpeg for audio -- sips is Apple's own
+// image converter and handles HEIC natively). Output always goes to a fresh
+// temp file; never touches the original attachment.
+function transcodeHeicToJpeg(inputPath) {
+  return new Promise((resolve, reject) => {
+    const outputPath = path.join(
+      os.tmpdir(),
+      `sendnew-image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+    );
+    execFile(
+      "sips",
+      ["-s", "format", "jpeg", inputPath, "--out", outputPath],
+      { timeout: 15000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(stderr?.trim() || error.message));
+          return;
+        }
+        resolve(outputPath);
+      }
+    );
+  });
+}
+
 // A tiny/mismatched download can happen even with a 200 OK -- e.g. a CDN or
 // auth layer serving an HTML error page or a redirect target instead of the
 // real file, none of which fetch() itself treats as a failure. This is
@@ -239,6 +268,7 @@ module.exports = {
   sendIMessageAttachment,
   uploadInboundAttachment,
   transcodeAudioToM4a,
+  transcodeHeicToJpeg,
   startFaceTime,
   watchFaceTimeCall,
 };

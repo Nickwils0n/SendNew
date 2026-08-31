@@ -10,6 +10,7 @@ const {
   sendIMessageAttachment,
   uploadInboundAttachment,
   transcodeAudioToM4a,
+  transcodeHeicToJpeg,
   startFaceTime,
   watchFaceTimeCall,
 } = require("./src/messagesBridge");
@@ -356,6 +357,15 @@ function startAgent(token, device) {
               // original file, which belongs to Messages.app's own store.
               uploadPath = await transcodeAudioToM4a(inbound.attachment.filePath);
               uploadMimeType = "audio/mp4";
+              tempFileToClean = uploadPath;
+            } else if (uploadMimeType === "image/heic" || uploadMimeType === "image/heif") {
+              // iPhones default to capturing photos as HEIC, which most
+              // browsers besides Safari/WebKit can't render at all --
+              // confirmed via live testing that these showed up as a blank
+              // placeholder on the CRM's web UI. Same fix pattern as audio
+              // above: transcode to something universally viewable first.
+              uploadPath = await transcodeHeicToJpeg(inbound.attachment.filePath);
+              uploadMimeType = "image/jpeg";
               tempFileToClean = uploadPath;
             }
             await uploadInboundAttachment(SERVER_HTTP_URL, token, {
