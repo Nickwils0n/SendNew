@@ -135,10 +135,18 @@ function consumePendingSelfSend(contactHandle, body) {
 // why Live Photos weren't coming through at all). Explicitly prefer an
 // image/* attachment when one exists, so a Live Photo comes through as its
 // still-photo component instead of being dropped.
+// Confirmed via live testing: voice message (tap-to-record audio) rows have
+// an entirely empty `mime_type` -- only `uti` is populated, as Apple's own
+// "com.apple.coreaudio-format" identifier for the .caf file underneath.
+// Relying on mime_type alone meant every voice message failed this check
+// from the very start, not just after the later retry-logic change (that
+// change only made the existing failure silent instead of visibly garbled).
+const AUDIO_UTIS = new Set(["com.apple.coreaudio-format"]);
+
 function getMediaAttachment(db, messageRowId) {
   const row = db
     .prepare(
-      `SELECT a.filename, a.mime_type
+      `SELECT a.filename, a.mime_type, a.uti
        FROM message_attachment_join maj
        JOIN attachment a ON maj.attachment_id = a.ROWID
        WHERE maj.message_id = ?
@@ -146,16 +154,22 @@ function getMediaAttachment(db, messageRowId) {
        LIMIT 1`
     )
     .get(messageRowId);
-  if (!row?.filename || !row.mime_type) return null;
+  if (!row?.filename) return null;
 
-  const isImage = row.mime_type.startsWith("image/");
-  const isAudio = row.mime_type.startsWith("audio/");
+  const isImage = row.mime_type?.startsWith("image/") ?? false;
+  const isAudio = row.mime_type?.startsWith("audio/") || AUDIO_UTIS.has(row.uti) || false;
   if (!isImage && !isAudio) return null;
 
   const filePath = row.filename.startsWith("~")
     ? path.join(os.homedir(), row.filename.slice(1))
     : row.filename;
-  return { filePath, mimeType: row.mime_type, isAudio };
+  // Voice messages arrive here with no usable mime_type at all -- audio/mp4
+  // is what they'll actually be uploaded as anyway, since main.js always
+  // transcodes them to that before sending to the server, but returning a
+  // real value here (rather than an empty string) keeps this object honest
+  // for anything else that reads it.
+  const mimeType = row.mime_type || (isAudio ? "audio/x-caf" : null);
+  return { filePath, mimeType, isAudio };
 }
 
 // chat.db doesn't necessarily write a message row and its attachment join
