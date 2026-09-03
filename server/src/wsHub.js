@@ -23,6 +23,15 @@ function sendToDevice(deviceId, message) {
   return true;
 }
 
+// A device's connection can go half-open -- the network path between it and
+// this server silently drops without either side getting a proper close
+// frame -- leaving a dead entry in `connections` that isDeviceOnline()/
+// sendToDevice() would otherwise trust. Real ping/pong (not the agent's own
+// app-level JSON heartbeat, which only updates lastSeenAt) lets this side
+// independently detect and clean up a connection the agent itself may not
+// even know is dead yet.
+const PING_INTERVAL_MS = 20000;
+
 function attachWsServer(httpServer) {
   const wss = new WebSocketServer({ server: httpServer, path: "/agent/socket" });
 
@@ -46,6 +55,7 @@ function attachWsServer(httpServer) {
       }
 
       connections.set(deviceId, ws);
+      ws.isAlive = true;
       await prisma.device.update({
         where: { id: deviceId },
         data: { online: true, lastSeenAt: new Date() },
@@ -55,6 +65,10 @@ function attachWsServer(httpServer) {
       ws.close(1011, "internal error");
       return;
     }
+
+    ws.on("pong", () => {
+      ws.isAlive = true;
+    });
 
     ws.on("message", async (raw) => {
       let msg;
@@ -78,6 +92,17 @@ function attachWsServer(httpServer) {
       }).catch(() => {});
     });
   });
+
+  setInterval(() => {
+    for (const ws of wss.clients) {
+      if (ws.isAlive === false) {
+        ws.terminate(); // fires "close" above, which cleans up connections + online status
+        continue;
+      }
+      ws.isAlive = false;
+      ws.ping();
+    }
+  }, PING_INTERVAL_MS);
 
   return wss;
 }
