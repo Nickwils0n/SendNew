@@ -158,6 +158,19 @@ function getMediaAttachment(db, messageRowId) {
   return { filePath, mimeType: row.mime_type, isAudio };
 }
 
+// chat.db doesn't necessarily write a message row and its attachment join
+// row in the same instant -- confirmed via a real inbound message that came
+// through as body: "￼" (the placeholder character) with no attachment
+// at all, permanently, because the 2s poll below caught the message row in
+// the brief gap before its attachment finished registering. Once a rowid
+// scrolls past `lastRowId` it's never looked at again by the main query, so
+// that single missed check meant the attachment was gone for good. Rows
+// whose only "text" is this placeholder are queued here instead of being
+// reported immediately, and get a few more looks over the following polls
+// before giving up for real.
+const ATTACHMENT_PLACEHOLDER_TEXT = "￼";
+const PENDING_ATTACHMENT_RETRIES = 5; // ~10s of grace at the 2s poll interval
+
 // Watches chat.db for both inbound replies and outbound messages sent from
 // somewhere other than this agent (see above). Requires the agent to be
 // granted Full Disk Access (see docs/ARCHITECTURE.md — a TCC permission a
@@ -165,6 +178,7 @@ function getMediaAttachment(db, messageRowId) {
 function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
   let lastRowId = 0;
   let timer = null;
+  const pendingAttachments = new Map(); // rowid -> { guid, handle, attemptsLeft }
 
   function poll() {
     let db;
@@ -210,6 +224,12 @@ function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
               kind: "IMESSAGE",
               attachment,
             });
+          } else if (text === ATTACHMENT_PLACEHOLDER_TEXT) {
+            pendingAttachments.set(row.rowid, {
+              guid: row.guid,
+              handle: row.handle,
+              attemptsLeft: PENDING_ATTACHMENT_RETRIES,
+            });
           } else if (text) {
             onInboundMessage({ externalId: row.guid, from: row.handle, body: text, kind: "IMESSAGE" });
           }
@@ -229,6 +249,19 @@ function watchChatDb(onInboundMessage, onExternalOutboundMessage, onError) {
             body: text,
             kind: "IMESSAGE",
           });
+        }
+      }
+
+      for (const [rowid, entry] of pendingAttachments) {
+        const attachment = getMediaAttachment(db, rowid);
+        if (attachment) {
+          onInboundMessage({ externalId: entry.guid, from: entry.handle, body: null, kind: "IMESSAGE", attachment });
+          pendingAttachments.delete(rowid);
+        } else if (--entry.attemptsLeft <= 0) {
+          // Genuinely never got an attachment (unsupported type, or it just
+          // never arrived) -- drop it rather than ever surfacing the raw
+          // placeholder character as if it were real message content.
+          pendingAttachments.delete(rowid);
         }
       }
     } catch (err) {
