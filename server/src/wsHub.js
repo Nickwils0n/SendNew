@@ -85,6 +85,15 @@ function attachWsServer(httpServer) {
     });
 
     ws.on("close", async () => {
+      // A device can have a new connection register before this old one's
+      // close event actually fires (confirmed live: pongs kept succeeding
+      // on a connection the server had already marked "offline" -- proof
+      // the socket itself was healthy, so the bug was here, not in network
+      // health detection). Deleting by deviceId alone, unconditionally,
+      // would wipe out a newer, perfectly live connection's entry if its
+      // predecessor's close event arrives late. Only clean up if this
+      // socket is still the one currently on record for this device.
+      if (connections.get(deviceId) !== ws) return;
       connections.delete(deviceId);
       await prisma.device.update({
         where: { id: deviceId },
