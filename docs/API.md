@@ -71,6 +71,13 @@ every signup:
   `apiKey`. Wire this to a "Regenerate API key" button; the old key stops
   working immediately.
 - `PATCH /admin/companies/:id` `{ name?, webhookUrl? }`.
+- `POST /admin/devices/:id/reset-password` — generates and returns a fresh
+  password for that device's existing username (stored hashed, so it can't
+  be recovered if lost). Company assignment, phoneNumber, and label are
+  untouched. Log back in via the agent's login window with the username it
+  already has and this new password -- useful when a Mac mini's device
+  token has expired (30-day TTL, see `docs/ARCHITECTURE.md` or
+  `server/src/auth.js`) and the original credentials weren't saved.
 
 **Keep `ADMIN_SECRET` server-side only** in wayne-crm (an env var on its own
 backend) — never ship it to the browser. The company's own dashboard talks to

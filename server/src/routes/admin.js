@@ -94,4 +94,20 @@ router.post("/devices/:id/unassign", asyncHandler(async (req, res) => {
   res.json(device);
 }));
 
+// Passwords are stored hashed and can't be recovered -- use this when a
+// Mac mini's credentials are lost (e.g. never saved after provisioning).
+// Generates and returns a fresh password for the device's *existing*
+// username, leaving its company assignment/phoneNumber/label untouched --
+// log back in via the agent's login window with the username it already
+// has and this new password.
+router.post("/devices/:id/reset-password", asyncHandler(async (req, res) => {
+  const password = nanoid(20);
+  const passwordHash = await hashPassword(password);
+  const device = await prisma.device.update({
+    where: { id: req.params.id },
+    data: { passwordHash },
+  });
+  res.json({ id: device.id, username: device.username, password });
+}));
+
 module.exports = router;
