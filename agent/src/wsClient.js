@@ -97,16 +97,21 @@ class AgentSocket {
       if (msg.type === "start_facetime") this.handlers.onStartFacetime?.(msg);
     });
 
-    this.ws.on("close", () => {
+    this.ws.on("close", (code, reasonBuf) => {
       clearInterval(this.heartbeatTimer);
       clearInterval(this.pingTimer);
       clearTimeout(this.forceReconnectTimer);
-      this.handlers.onClose?.();
+      this.handlers.onClose?.({ code, reason: reasonBuf?.toString() || "" });
       if (!this.stopped) setTimeout(() => this.connect(), RECONNECT_DELAY_MS);
     });
 
-    this.ws.on("error", () => {
-      // "close" fires right after; reconnection is handled there.
+    this.ws.on("error", (err) => {
+      // "close" fires right after with the real code/reason (or lack of
+      // one) -- log the error itself here too, since a raw socket/TLS
+      // error often carries detail the close event's code/reason won't
+      // (e.g. DNS failure, connection refused), and an endless silent
+      // connect/disconnect loop is otherwise impossible to diagnose.
+      console.error("[ws] error:", err.message);
     });
   }
 

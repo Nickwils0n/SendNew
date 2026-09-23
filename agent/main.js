@@ -191,8 +191,8 @@ function startAgent(token, device) {
       refreshTrayMenu();
       pushStatus();
     },
-    onClose: () => {
-      console.log("[agent] disconnected, will retry");
+    onClose: ({ code, reason } = {}) => {
+      console.log(`[agent] disconnected (code ${code ?? "?"}${reason ? `, reason: ${reason}` : ""}), will retry`);
       state.connected = false;
       refreshTrayMenu();
       pushStatus();

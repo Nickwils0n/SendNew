@@ -43,6 +43,10 @@ function attachWsServer(httpServer) {
       const payload = verifyDeviceToken(token);
       deviceId = payload.sub;
     } catch (err) {
+      // Was previously silent -- an expired/invalid token here produces
+      // exactly an endless, undiagnosable connect/disconnect loop on the
+      // agent side with nothing in either side's logs to explain why.
+      console.error(`ws auth rejected: ${err.message}`);
       ws.close(4001, "invalid token");
       return;
     }
@@ -50,6 +54,7 @@ function attachWsServer(httpServer) {
     try {
       const device = await prisma.device.findUnique({ where: { id: deviceId } });
       if (!device) {
+        console.error(`ws rejected: unknown device ${deviceId}`);
         ws.close(4004, "unknown device");
         return;
       }
