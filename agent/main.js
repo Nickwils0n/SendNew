@@ -220,6 +220,18 @@ function startAgent(token, device) {
         signOut();
       }
     },
+    onRestartAgent: () => {
+      // Triggered remotely from the CRM (POST /api/devices/:id/restart) --
+      // relaunches this whole Electron process, the same effect as the
+      // manual Ctrl-C + npm start restart that's routinely needed to clear
+      // whatever stuck internal state builds up over time. Only reachable
+      // while this device's WebSocket connection is actually up; if the
+      // agent's already fully unresponsive/disconnected, this can't help
+      // and someone still has to restart it at the machine.
+      console.log("[agent] restart requested from CRM -- relaunching");
+      app.relaunch();
+      app.exit(0);
+    },
     onSendMessage: async (msg) => {
       const baselineRowId = getMaxMessageRowId();
       const fullDiskAccessAvailable = checkPermissions().fullDiskAccess;

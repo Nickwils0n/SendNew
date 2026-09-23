@@ -129,4 +129,20 @@ router.post("/facetime", asyncHandler(async (req, res) => {
   res.status(202).json({ message });
 }));
 
+// Restart a device's agent app remotely -- useful when it needs a kick
+// (e.g. some stuck internal state) but is otherwise still connected. Only
+// works while the device is online in the first place: if its WebSocket
+// connection is down, there's no channel to deliver this over, and someone
+// has to restart it physically at the machine.
+router.post("/devices/:id/restart", asyncHandler(async (req, res) => {
+  const device = await prisma.device.findFirst({
+    where: { id: req.params.id, companyId: req.company.id },
+  });
+  if (!device) return res.status(404).json({ error: "device not found for this company" });
+  if (!isDeviceOnline(device.id)) return res.status(503).json({ error: "device offline -- can't be restarted remotely" });
+
+  sendToDevice(device.id, { type: "restart_agent" });
+  res.status(202).json({ ok: true });
+}));
+
 module.exports = router;

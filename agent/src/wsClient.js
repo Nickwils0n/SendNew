@@ -95,6 +95,7 @@ class AgentSocket {
       }
       if (msg.type === "send_message") this.handlers.onSendMessage?.(msg);
       if (msg.type === "start_facetime") this.handlers.onStartFacetime?.(msg);
+      if (msg.type === "restart_agent") this.handlers.onRestartAgent?.();
     });
 
     this.ws.on("close", (code, reasonBuf) => {

@@ -17,6 +17,13 @@ provisioning tooling, not the public website.
   that Mac sits) — the agent fetches it and hands the file to Messages.app,
   it does not treat `mediaUrl` as anything Apple-specific.
 - `POST /api/facetime` `{ deviceId, to, video? }` — start a FaceTime call.
+- `POST /api/devices/:id/restart` — remotely relaunches that device's agent
+  app. Useful for the occasional stuck-state issue that a full restart
+  clears (previously a manual Ctrl-C + `npm start` at the Mac mini itself).
+  Returns `202` if the restart command was sent, or `503` if the device
+  isn't currently connected — if it's already unresponsive/offline, there's
+  no channel to deliver this over, and someone still has to restart it
+  physically at the machine.
 
 ## Image & voice message attachments
 
