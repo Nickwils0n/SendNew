@@ -341,10 +341,9 @@ function getMaxMessageRowId() {
 //   { type: "resolved", status: "DELIVERED" | "FAILED", errorCode }
 //     Apple's own delivery/error columns resolved after confirmation.
 //
-// `matchAttachment: true` looks for the newest outbound row from this
-// contact that has an attachment at all, instead of matching on `body` text
-// (attachment rows have no text) -- used for image/audio sends instead of
-// the text-matching path.
+// `matchAttachment: true` only affects which confirm timeout applies
+// (attachments get a longer allowance) -- matching itself no longer keys
+// off attachment-vs-text at all, see below.
 function watchOutboundStatus(
   { contactHandle, body, baselineRowId, fullDiskAccessAvailable, matchAttachment },
   onEvent
@@ -375,36 +374,27 @@ function watchOutboundStatus(
         findTimer = setTimeout(findRow, OUTBOUND_POLL_MS);
         return;
       }
-      let row;
-      if (matchAttachment) {
-        row = db
-          .prepare(
-            `SELECT m.ROWID as rowid, m.is_delivered, m.error
-             FROM message m
-             LEFT JOIN handle h ON m.handle_id = h.ROWID
-             WHERE m.ROWID > ? AND m.is_from_me = 1 AND h.id = ?
-               AND EXISTS (SELECT 1 FROM message_attachment_join maj WHERE maj.message_id = m.ROWID)
-             ORDER BY m.ROWID ASC
-             LIMIT 1`
-          )
-          .get(baselineRowId, contactHandle);
-      } else {
-        // Can't filter by text in SQL -- on newer macOS versions the plain
-        // `text` column is often empty and the real content only exists in
-        // attributedBody, which needs JS-side extraction (see
-        // readMessageText). Candidate rows are few (right after our own
-        // send), so scanning them in JS is cheap.
-        const candidates = db
-          .prepare(
-            `SELECT m.ROWID as rowid, m.text, m.attributedBody, m.is_delivered, m.error
-             FROM message m
-             LEFT JOIN handle h ON m.handle_id = h.ROWID
-             WHERE m.ROWID > ? AND m.is_from_me = 1 AND h.id = ?
-             ORDER BY m.ROWID ASC`
-          )
-          .all(baselineRowId, contactHandle);
-        row = candidates.find((candidate) => readMessageText(candidate) === body);
-      }
+      // Deliberately not matching on exact text equality -- chat.db's
+      // stored text can differ from what was actually sent in ways that
+      // have nothing to do with whether the send worked (attributedBody
+      // extraction quirks, Messages.app's own link-preview/URL
+      // normalization for messages containing a "#" or other special
+      // characters -- each confirmed via live testing to cause a real send
+      // to be falsely reported as failed because the stored text no longer
+      // matched byte-for-byte). baselineRowId + contactHandle already
+      // scope this tightly to "the row created by this specific send" in
+      // any realistic single-send-at-a-time case, the same assumption
+      // matchAttachment below has relied on successfully all along.
+      const row = db
+        .prepare(
+          `SELECT m.ROWID as rowid, m.is_delivered, m.error
+           FROM message m
+           LEFT JOIN handle h ON m.handle_id = h.ROWID
+           WHERE m.ROWID > ? AND m.is_from_me = 1 AND h.id = ?
+           ORDER BY m.ROWID ASC
+           LIMIT 1`
+        )
+        .get(baselineRowId, contactHandle);
 
       if (row) {
         targetRowId = row.rowid;
