@@ -20,7 +20,15 @@ const CONFIRM_TIMEOUT_ATTACHMENT_MS = 20000;
 // FAILED on messages that actually delivered fine. Give those the same
 // longer allowance as attachments.
 const CONFIRM_TIMEOUT_LINK_MS = 20000;
-const URL_PATTERN = /https?:\/\/\S+/i;
+// Confirmed via live testing: Messages.app's link/data detector triggers
+// the same slow rich-preview generation for a bare domain with no scheme
+// at all (e.g. "youtube.com") as it does for a full "https://..." URL --
+// matching only the explicit-scheme form left bare-domain messages on the
+// short plain-text timeout, falsely reporting FAILED on ones that actually
+// delivered fine. This is intentionally loose (a false positive here just
+// costs an unnecessarily long confirm window, not a wrong result -- much
+// cheaper than a false negative, which reports a real send as failed).
+const URL_PATTERN = /https?:\/\/\S+|\b[a-z0-9-]+\.[a-z]{2,}\b/i;
 // Confirmed via live testing (checking chat.db well after the fact) that
 // Apple's delivery receipt round-trip -- recipient device -> Apple's
 // servers -> back to this Mac's chat.db -- can genuinely take longer than
