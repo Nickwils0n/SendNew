@@ -66,6 +66,11 @@ if (app.isPackaged) {
 }
 
 function createLoginWindow() {
+  if (loginWindow) {
+    loginWindow.show();
+    loginWindow.focus();
+    return;
+  }
   loginWindow = new BrowserWindow({
     width: 380,
     height: 340,
@@ -76,6 +81,9 @@ function createLoginWindow() {
     },
   });
   loginWindow.loadFile("login.html");
+  loginWindow.on("closed", () => {
+    loginWindow = null;
+  });
 }
 
 function createStatusWindow() {
@@ -168,8 +176,13 @@ function refreshTrayMenu() {
 }
 
 async function signOut() {
-  await keytar.deletePassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT);
+  // Stop the socket first, synchronously, before the await below -- close's
+  // own reconnect scheduling in wsClient.js runs synchronously right after
+  // this handler is invoked, so awaiting the keytar deletion first left a
+  // window where one more reconnect (with the same doomed token) could get
+  // scheduled before stop() actually took effect.
   socket?.stop();
+  await keytar.deletePassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT);
   stopChatWatcher?.();
   tray?.destroy();
   tray = null;
@@ -196,6 +209,16 @@ function startAgent(token, device) {
       state.connected = false;
       refreshTrayMenu();
       pushStatus();
+      if (code === 4001) {
+        // The server rejected this specific token -- retrying with the
+        // same one forever (the previous behavior) can never succeed.
+        // Device tokens expire after 30 days (see server/src/auth.js) with
+        // no renewal mechanism, so this is the expected way a token goes
+        // bad over time, not just a one-off glitch. Clear it and prompt
+        // for a fresh login instead of looping silently.
+        console.error("[agent] token rejected by server -- signing out, please log in again");
+        signOut();
+      }
     },
     onSendMessage: async (msg) => {
       const baselineRowId = getMaxMessageRowId();
