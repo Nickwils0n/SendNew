@@ -1380,9 +1380,12 @@ class Zombie {
     return { died: false };
   }
   applyNet(d) {
-    if (d.pos) this.netTarget = { pos: V3(d.pos[0], d.pos[1], d.pos[2]), ry: d.ry || 0, state: d.state };
+    if (d.pos) this.netTarget = { pos: V3(d.pos[0], d.pos[1], d.pos[2]), ry: d.ry || 0 };
     if (d.hp != null) this.hp = d.hp;
-    if (d.state) this.state = d.state === 'dead' && this.state !== 'dead' ? (this.deathT = 0, 'dead') : this.state;
+    if (d.state && d.state !== this.state) {
+      if (d.state === 'dead' && this.state !== 'dead') this.deathT = 0;
+      this.state = d.state;
+    }
   }
   // ---- host-only AI ----
   aiTick(dt) {
@@ -1429,10 +1432,17 @@ class Zombie {
   }
   // ---- render (both host + client run this every frame) ----
   render(dt) {
-    if (!Net.isHost && this.netTarget) {
-      this.pos.lerp(this.netTarget.pos, Math.min(1, dt * 10));
-      let dyaw = this.netTarget.ry - this.facing; while (dyaw > Math.PI) dyaw -= Math.PI * 2; while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-      this.targetFacing = this.facing + dyaw;
+    if (!Net.isHost) {
+      // the rise-out-of-the-ground animation is purely cosmetic and timed
+      // locally (riseT only ever advances via aiTick, which is host-only),
+      // so without this a client would see every zombie sit at 5% scale for
+      // a full second, then pop to full size the instant 'chase' arrives.
+      if (this.state === 'rising') this.riseT += dt;
+      if (this.netTarget) {
+        this.pos.lerp(this.netTarget.pos, Math.min(1, dt * 10));
+        let dyaw = this.netTarget.ry - this.facing; while (dyaw > Math.PI) dyaw -= Math.PI * 2; while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+        this.targetFacing = this.facing + dyaw;
+      }
     }
     let df = this.targetFacing - this.facing; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2;
     this.facing += df * Math.min(1, dt * 10);
@@ -1534,6 +1544,23 @@ Game.spawnDirectorTick = function (dt) {
 };
 Game.startMiniWave = function (count, onComplete) {
   this.state.miniWave = { remaining: count, alive: 0, onComplete, cd: 0.15 };
+};
+// Zombies only ever got a one-time spawn position over the network, plus later
+// hp/death updates — never an ongoing position update — so a client's copy of
+// each zombie just sat frozen wherever it spawned while the host's version
+// actively chased players around. Broadcast a compact position/state snapshot
+// a few times a second so clients can see them where they actually are.
+Game.zombieSyncTick = function (dt) {
+  if (!Net.isHost || Net.conns.size === 0) return;
+  this._zSyncAccum = (this._zSyncAccum || 0) + dt;
+  if (this._zSyncAccum < 1 / 12) return;
+  this._zSyncAccum = 0;
+  const list = [];
+  for (const z of this.zombies.values()) {
+    if (z.state === 'dead') continue;
+    list.push([z.id, Math.round(z.pos.x * 100) / 100, Math.round(z.pos.y * 100) / 100, Math.round(z.pos.z * 100) / 100, Math.round(z.facing * 100) / 100, Math.round(z.hp), z.state]);
+  }
+  if (list.length) Net.emit('zSync', { list });
 };
 // ---- Map 3 finale: a continuous-pressure timed holdout, independent of the
 // normal round-clear spawn director (spawnDirectorTick branches here first).
@@ -2330,7 +2357,15 @@ Game.playMapTransition = function (to, delay) {
 Game.handleMsg = function (type, data, fromId) {
   switch (type) {
     case 'join': break;
-    case 'lobby': Game.onLobbyUpdate && Game.onLobbyUpdate(data.players); break;
+    case 'lobby': {
+      // Net.players is how playerCount() decides solo-vs-co-op (dead outright
+      // vs. downed-and-revivable) — the host populates its own copy directly,
+      // but a client never did, so it always read as "solo" and skipped the
+      // down/revive state entirely no matter how many players were in the game.
+      if (!Net.isHost) { Net.players.clear(); for (const p of data.players) Net.players.set(p.id, p); }
+      Game.onLobbyUpdate && Game.onLobbyUpdate(data.players);
+      break;
+    }
     case 'pstate': {
       if (!Net.isHost) break;
       let av = Game.remoteAvatars.get(fromId);
@@ -2365,6 +2400,14 @@ Game.handleMsg = function (type, data, fromId) {
     case 'zSpawn': if (!Net.isHost && !Game.zombies.has(data.id)) { const z = new Zombie(data.id, V3(data.pos[0], data.pos[1], data.pos[2]), data.hp, data.speed); Game.zombies.set(data.id, z); } break;
     case 'zHit': { const z = Game.zombies.get(data.id); if (z) { z.hp = data.hp; z.stagger = 0.12; } break; }
     case 'zDeath': { const z = Game.zombies.get(data.id); if (z && z.state !== 'dead') { z.state = 'dead'; z.deathT = 0; } break; }
+    case 'zSync': {
+      if (Net.isHost) break; // this is our own broadcast looping back; our zombies are already authoritative
+      for (const [id, x, y, z, ry, hp, state] of data.list) {
+        const zom = Game.zombies.get(id);
+        if (zom) zom.applyNet({ pos: [x, y, z], ry, hp, state });
+      }
+      break;
+    }
     case 'points': Game.state.points = data.value; Game.state.pointsEarned = Math.max(Game.state.pointsEarned || 0, data.value); break;
     case 'holdoutStart': Object.assign(Game.state.holdout, { active: true, t: 0, won: false, duration: data.duration }); Game.onHoldoutStartFx && Game.onHoldoutStartFx(); Audio_.play('roundStart', 1); break;
     case 'holdoutTick': Game.state.holdout.t = data.t; Game.state.holdout.charge = data.charge; Game.onHoldoutTickFx && Game.onHoldoutTickFx(); break;
@@ -2443,6 +2486,7 @@ function animate(now) {
   Game.zombies.forEach((z) => { if (Net.isHost) z.aiTick(dt); z.render(dt); });
   if (Net.isHost) {
     Game.spawnDirectorTick(dt);
+    Game.zombieSyncTick(dt);
     const toRemove = [];
     Game.zombies.forEach((z) => { if (z.finished) toRemove.push(z.id); });
     toRemove.forEach((id) => { Game.zombies.get(id).dispose(); Game.zombies.delete(id); });
