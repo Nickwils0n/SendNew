@@ -481,9 +481,14 @@ const Input = (() => {
   });
   addEventListener('keyup', (e) => down.delete(e.code));
   addEventListener('blur', () => { down.clear(); mouseDown = false; });
-  canvasEl.addEventListener('mousedown', (e) => { if (e.button === 0) { mouseDown = true; mouseDownEdge = true; } });
+  // Attached to window/document, NOT the canvas: once Pointer Lock is engaged
+  // (locked on document.body — see `controls` below), mouse events are routed
+  // through the locked element rather than whatever DOM element sits visually
+  // under the hidden cursor, so a listener scoped to a *descendant* element
+  // like the canvas would silently never see them.
+  addEventListener('mousedown', (e) => { if (e.button === 0) { mouseDown = true; mouseDownEdge = true; } });
   addEventListener('mouseup', (e) => { if (e.button === 0) mouseDown = false; });
-  canvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
+  addEventListener('contextmenu', (e) => e.preventDefault());
 
   // touch controls
   const touchEl = document.getElementById('touch');
@@ -567,12 +572,14 @@ const World = {
   colliders: [],       // { mesh, box }
   wallrunMeshes: [],   // meshes eligible for wall-run/wall-climb attach
   vaultMeshes: [],     // low obstacles eligible for auto-vault
-  floorMeshes: [],     // ground raycast targets
+  floorMeshes: [],     // ground raycast targets (probed downward)
+  ceilingMeshes: [],   // overhead raycast targets (probed upward, stops a jump's rise)
   hazards: [],         // { box, kind:'pit'|'lava', damage }
   bounds: new THREE.Box3(V3(-40, -20, -40), V3(40, 40, 40)),
   reset() {
     this.colliders.length = 0; this.wallrunMeshes.length = 0; this.vaultMeshes.length = 0;
-    this.floorMeshes.length = 0; this.hazards.length = 0; this.spawnPoints.length = 0; this.interactables.length = 0;
+    this.floorMeshes.length = 0; this.ceilingMeshes.length = 0; this.hazards.length = 0;
+    this.spawnPoints.length = 0; this.interactables.length = 0;
     this.triggerZones.length = 0; this.colliderMeshCache = null;
   },
   addCollider(mesh, opts = {}) {
@@ -581,7 +588,10 @@ const World = {
     // Only wall-like obstacles take part in horizontal push-out. A flat floor
     // slab must NOT: a standing player sits exactly at its top surface, so
     // its Y-range always "contains" the player and it would otherwise be
-    // treated as surrounding them on all four sides every single frame.
+    // treated as surrounding them on all four sides every single frame. The
+    // same reasoning applies to a ceiling slab, handled by its own dedicated
+    // upward raycast (ceilingMeshes) rather than by joining colliders/floor.
+    if (opts.ceiling) { this.ceilingMeshes.push(mesh); return box; }
     if (opts.wall !== false) { this.colliders.push({ mesh, box }); this.colliderMeshCache = null; }
     if (opts.wallrun) this.wallrunMeshes.push(mesh);
     if (opts.vault) this.vaultMeshes.push(mesh);
@@ -1203,6 +1213,19 @@ class PlayerController {
     resolveHorizontalCollisions(this.pos, PLAYER_RADIUS);
     const prevY = this.pos.y;
     this.pos.y += this.vel.y * dt;
+    // ceiling: stop a rising player's head at any overhead geometry instead of
+    // letting it pass straight through (probed from the pre-rise height, over
+    // the whole distance climbed this frame, for the same tunneling reason as
+    // the floor probe below).
+    if (this.vel.y > 0 && World.ceilingMeshes.length) {
+      const riseDist = this.pos.y - prevY;
+      const headOrigin = V3(this.pos.x, prevY + PLAYER_HEIGHT - 0.1, this.pos.z);
+      const chit = castAgainst(World.ceilingMeshes, headOrigin, V3(0, 1, 0), riseDist + 0.3);
+      if (chit) {
+        const maxFeetY = chit.point.y - PLAYER_HEIGHT + 0.08;
+        if (this.pos.y > maxFeetY) { this.pos.y = maxFeetY; this.vel.y = 0; }
+      }
+    }
     const wasGround = this.onGround;
     // probe from the PRE-fall height, spanning the whole distance moved this frame,
     // so a fast fall can never tunnel through a thin floor.
@@ -1621,7 +1644,13 @@ function addBox(parent, w, h, d, material, x, y, z, opts = {}) {
   if (opts.rz) mesh.rotation.z = opts.rz;
   mesh.castShadow = opts.cast !== false; mesh.receiveShadow = opts.receive !== false;
   parent.add(mesh);
-  if (opts.collide !== false) {
+  if (opts.ceiling) {
+    // Registered regardless of `collide` (ceilings are normally passed
+    // collide:false to opt out of the wall/floor system entirely) — an
+    // overhead slab needs its own upward raycast, never horizontal push-out
+    // or downward floor detection, so it never enters that system at all.
+    World.addCollider(mesh, { ceiling: true });
+  } else if (opts.collide !== false) {
     // A thin, wide slab (floor/roof/platform) stands you exactly at its top
     // surface, so it must be excluded from horizontal push-out — only its
     // taller, narrower cousins (walls, crates, barriers) block sideways.
@@ -1800,37 +1829,34 @@ function buildMap1() {
   function corridor(z0, z1, halfW, opts = {}) {
     const len = z1 - z0, cz = (z0 + z1) / 2;
     addBox(mapRoot, halfW * 2, 0.3, len, floorMat, 0, -0.15, cz, { collide: true, floor: true, cast: false });
-    addBox(mapRoot, 0.4, 4, len, wallMat, -halfW, 2, cz, { wallrun: !!opts.wallrunL, collide: !opts.openL });
-    addBox(mapRoot, 0.4, 4, len, wallMat, halfW, 2, cz, { wallrun: !!opts.wallrunR, collide: !opts.openR });
-    if (!opts.noCeil) addBox(mapRoot, halfW * 2 + 0.8, 0.3, len, ceilMat, 0, 4.15, cz, { collide: false, cast: false });
+    addBox(mapRoot, 0.4, 5.2, len, wallMat, -halfW, 2.6, cz, { wallrun: !!opts.wallrunL, collide: !opts.openL });
+    addBox(mapRoot, 0.4, 5.2, len, wallMat, halfW, 2.6, cz, { wallrun: !!opts.wallrunR, collide: !opts.openR });
+    if (!opts.noCeil) addBox(mapRoot, halfW * 2 + 0.8, 0.3, len, ceilMat, 0, 5.3, cz, { collide: false, cast: false, ceiling: true }); // headroom above a double-jump apex
   }
 
   // Spawn room 0..9
   corridor(-1, 9, 5.5);
-  addFlickerLight(mapRoot, V3(0, 3.6, 3));
+  addFlickerLight(mapRoot, V3(0, 4.2, 3));
   World.spawnPoints.push(V3(-4.6, 0, 1), V3(4.6, 0, 1), V3(-4.6, 0, 7));
-  // kept within +-3.2 so a player who vaults it and keeps running forward stays
-  // inside Corridor A's narrower footprint just past z=9 (the wider spawn room
-  // pinches down there; see the width note on that corridor() call below).
   addBox(mapRoot, 1.4, 1.1, 1.4, mat(null, { color: 0x2b2f38, roughness: 0.9 }), -2.4, 0.55, 2, { vault: true });
   addWallBuy(mapRoot, 'wb_smg', V3(4.55, 1.5, 5), V3(-1, 0, 0), 'smg');
 
   // Corridor A 9..17, branch door to storage on +X at z~13
-  corridor(9, 17, 3.2); // narrower than the spawn room (5.5) — keep spawn-room props within +-3.2
-  addFlickerLight(mapRoot, V3(0, 3.6, 13));
-  const storageDoorBox = new THREE.Box3(V3(3.0, 0, 11.5), V3(3.8, 3.2, 14.5));
+  corridor(9, 17, 5.5); // matches the spawn room's width so there's no pinch point to fall through at z=9
+  addFlickerLight(mapRoot, V3(0, 4.2, 13));
+  const storageDoorBox = new THREE.Box3(V3(5.3, 0, 11.5), V3(6.1, 3.2, 14.5));
   addDoor(mapRoot, 'door1', storageDoorBox, DOOR_PRICES[0]);
   // Storage Sector (optional loot room)
-  addBox(mapRoot, 8, 0.3, 8, floorMat, 9, -0.15, 13, { collide: true, floor: true, cast: false });
-  addBox(mapRoot, 8, 0.3, 0.4, wallMat, 9, 2, 9.2, {});
-  addBox(mapRoot, 8, 0.3, 0.4, wallMat, 9, 2, 16.8, {});
-  addBox(mapRoot, 0.4, 4, 8, wallMat, 5.1, 2, 13, {});
-  addBox(mapRoot, 0.4, 4, 8, wallMat, 12.9, 2, 13, {});
-  addBox(mapRoot, 8.8, 0.3, 8.8, ceilMat, 9, 4.15, 13, { collide: false, cast: false });
-  addFlickerLight(mapRoot, V3(9, 3.6, 13), 0x8fd3ff);
-  addWallBuy(mapRoot, 'wb_shotgun', V3(9, 1.5, 16.5), V3(0, 0, -1), 'shotgun');
-  addPerkMachine(mapRoot, 'perk_jugger', V3(11.8, 0, 13), 'jugger', PERK_PRICE, 0xff3b3b, 'JUGGR-FIZZ');
-  World.spawnPoints.push(V3(6.5, 0, 10), V3(11.5, 0, 15.5));
+  addBox(mapRoot, 8, 0.3, 8, floorMat, 11.3, -0.15, 13, { collide: true, floor: true, cast: false });
+  addBox(mapRoot, 8, 0.3, 0.4, wallMat, 11.3, 2.6, 9.2, {});
+  addBox(mapRoot, 8, 0.3, 0.4, wallMat, 11.3, 2.6, 16.8, {});
+  addBox(mapRoot, 0.4, 5.2, 8, wallMat, 7.4, 2.6, 13, {});
+  addBox(mapRoot, 0.4, 5.2, 8, wallMat, 15.2, 2.6, 13, {});
+  addBox(mapRoot, 8.8, 0.3, 8.8, ceilMat, 11.3, 5.3, 13, { collide: false, cast: false, ceiling: true });
+  addFlickerLight(mapRoot, V3(11.3, 4.2, 13), 0x8fd3ff);
+  addWallBuy(mapRoot, 'wb_shotgun', V3(11.3, 1.5, 16.5), V3(0, 0, -1), 'shotgun');
+  addPerkMachine(mapRoot, 'perk_jugger', V3(14.1, 0, 13), 'jugger', PERK_PRICE, 0xff3b3b, 'JUGGR-FIZZ');
+  World.spawnPoints.push(V3(8.8, 0, 10), V3(13.8, 0, 15.5));
 
   // Power Room 17..27
   corridor(17, 27, 5.5);
@@ -1892,7 +1918,7 @@ function buildMap1() {
   addBox(mapRoot, 0.5, 10, 15, pitWallMat, -5.5, 5, 35, { wallrun: true });
   addBox(mapRoot, 0.5, 10, 15, pitWallMat, 5.5, 5, 35, { wallrun: true });
   for (let i = 0; i < 5; i++) { addFlickerLight(mapRoot, V3(-5.2, 6.5, 29 + i * 3), 0xff6a3b); addFlickerLight(mapRoot, V3(5.2, 6.5, 29 + i * 3), 0xff6a3b); }
-  addBox(mapRoot, 11.8, 0.3, 15.6, ceilMat, 0, 10.3, 35, { collide: false, cast: false });
+  addBox(mapRoot, 11.8, 0.3, 15.6, ceilMat, 0, 10.3, 35, { collide: false, cast: false, ceiling: true });
   World.spawnPoints.push(V3(-4.5, 0, 42), V3(4.5, 0, 42));
 
   // Escape lift 41..46
