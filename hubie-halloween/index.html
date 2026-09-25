@@ -604,6 +604,12 @@ const TOPS = {
     '..eeeeeeee..', '.eeeeeeeees.', '.eeeeeeeee..', '.eeeeeeeee..', '.seeeeeeee..', '..GGGGGGGG..', '..GGGGGGGG..', '..GGGGGGGG..'],
   woman: ['...rrrrr....', '..rrrrrrrr..', '..rrsssss...', '..rrssksss..', '..rrssssss..', '..rrssmms...', '..rr.sss....',
     '..pppppppp..', '.pppppppppp.', '.ppppppppps.', '.pppppppp...', '.spppppppp..', '..mmmmmmmm..', '..mmmmmmmm..', '..mmmmmmmm..'],
+  whitey: ['....hhhhh...', '...hhhhhhh..', '..hhssssss..', '..hsssskss..', '..hssssssss.', '...ssskks...', '....ssss....',
+    '..rrrrrrrr..', '.rrrrrrrrrr.', '.rrrrryrrrr.', '.rrrrrrrrrr.', '.srrrrrrrr..', '..RRRRRRRR..', '..RRRRRRRR..', '..RRRRRRRR..'],
+  davey: ['....kkkkk...', '...kkkkkkk..', '..ksssssss..', '..ksssskss..', '..kssssssss.', '...sskks....', '....ssss....',
+    '..uuuuuuuu..', '.uuuuuuuuuu.', '.uuuuuuuuuu.', '.uuuuuuuuuu.', '.suuuuuuuu..', '..GGGGGGGG..', '..GGGGGGGG..', '..GGGGGGGG..'],
+  elf: ['....yyyyy...', '...yyyyyyy..', '..yysssssy..', '..ysssksss..', '..yssssssss.', '...sssSSs...', '....ssss....',
+    '..eeeeeeee..', '.eeeeeeeeee.', '.eeeerreeee.', '.eeeeeeeeee.', '.seeeeeeee..', '..EEEEEEEE..', '..EEEEEEEE..', '..EEEEEEEE..'],
 };
 const S = {};
 S.ghost = humanoid(TOPS.ghost, 'x', 'r');
@@ -621,6 +627,9 @@ S.mom = humanoid(TOPS.mom, 'p', 'w');
 S.kid = humanoid(TOPS.kid, 'u', 'w');
 S.man = humanoid(TOPS.man, 'G', 'k');
 S.woman = humanoid(TOPS.woman, 'm', 'k');
+S.whitey = humanoid(TOPS.whitey, 'H', 'B');
+S.davey = humanoid(TOPS.davey, 'G', 'k');
+S.elf = humanoid(TOPS.elf, 'u', 'B');
 
 // Rider torsos (14x13) sit on a bike; legs are drawn procedurally.
 const RIDER = {
@@ -658,6 +667,10 @@ const SMALL = {
   bat1: ['..........', '....GG....', '.GGGGGGGG.', 'GGGGrrGGGG', 'G...GG...G'],
   pumpkinSm: ['...E....', '.ooEoo..', 'oOyoyOo.', 'oOoooOo.', 'oyyyyyo.', '.ooooo..'],
   bubble: ['.kkkkk.', 'kWWWWWk', 'kWWWWWk', '.kkkkk.', '..kk...', '..k....'],
+  puck0: ['.kkk.', 'kkkkk', 'kkkkk'],
+  puck1: ['..k..', '.kkk.', 'kkkkk'],
+  basketball: ['.oOo.', 'OkOkO', 'kOOOk', 'OkOkO', '.oOo.'],
+  puckshot: ['.kk.', 'kkkk', '.kk.'],
 };
 const SM = {};
 for (const k in SMALL) SM[k] = spr(SMALL[k]);
@@ -782,8 +795,42 @@ function makeWagon(frame) {
 }
 const WAGON = [makeWagon(0), makeWagon(1)];
 
+// Officer Grabinski's cruiser (Eight Crazy Nights chapter), built the same way as the wagon
+function makeCruiser(frame) {
+  const [c, g] = makeCanvas(72, 30);
+  g.fillStyle = '#e8e8ec'; g.fillRect(2, 12, 68, 11); g.fillRect(8, 3, 46, 10);
+  g.fillStyle = '#1a2a55'; g.fillRect(4, 15, 60, 6);
+  g.fillStyle = '#0d1830'; g.fillRect(4, 15, 60, 1); g.fillRect(4, 20, 60, 1); g.fillRect(34, 15, 1, 6);
+  g.fillStyle = '#9fd8ff'; g.fillRect(10, 5, 12, 7); g.fillRect(24, 5, 13, 7); g.fillRect(39, 5, 13, 7);
+  g.fillStyle = '#140c1c'; g.fillRect(8, 3, 46, 1); g.fillRect(2, 22, 68, 1);
+  g.fillStyle = frame ? '#ff3b3b' : '#3f6fd0'; g.fillRect(20, 1, 10, 3);
+  g.fillStyle = frame ? '#3f6fd0' : '#ff3b3b'; g.fillRect(32, 1, 10, 3);
+  g.fillStyle = '#140c1c'; g.fillRect(18, 0, 26, 1);
+  g.fillStyle = '#ffd23f'; g.fillRect(68, 14, 2, 3);
+  g.fillStyle = '#d83a3a'; g.fillRect(2, 14, 2, 3);
+  for (const wx of [16, 56]) {
+    g.fillStyle = '#140c1c'; g.fillRect(wx - 5, 21, 11, 9); g.fillRect(wx - 4, 20, 9, 1);
+    g.fillStyle = '#9a94a8'; g.fillRect(wx - 2, 24, 5, 3);
+    g.fillStyle = '#d0d0e0'; g.fillRect(wx + (frame ? -1 : 1), 25, 1, 1);
+  }
+  return c;
+}
+const CRUISER = [makeCruiser(0), makeCruiser(1)];
+
 // Big boss sprites (20 wide)
 const BIG = {
+  duke: [
+    '.....kkkkk.......', '.....kkkkk.......', '....ksssssk......', '....sssksss......', '....sssssss......',
+    '.....sskks.......', '......ssss.......',
+    '...vvvvvvvvvv....', '..vvvvvvvvvvvv...', '..vRvvvvvvvvRv...', '..vvvvvvvvvvvv...', '..vvvvvvvvvvvv...',
+    '..svvvvvvvvvvs...', '...uu.....uu.....', '...uu.....uu.....', '...uu.....uu.....',
+    '...uu.....uu.....', '..kkkk...kkkk....', '..kkkk...kkkk....'],
+  stinger: [
+    '.....kkkkk.......', '....kkkkkkk......', '....ssssssk......', '....ssssksss.....', '....sssssss......',
+    '.....sskks.......', '......ssss.......',
+    '...GGGGGGGGGG....', '..GGGGGGGGGGGG...', '..GGGyGGGGGyGG...', '..GGGGGGGGGGGG...', '..GGGGGGGGGGGG...',
+    '..sGGGGGGGGGGs...', '...GG.....GG.....', '...GG.....GG.....', '...GG.....GG.....',
+    '...GG.....GG.....', '..kkkk...kkkk....', '..kkkk...kkkk....'],
   pete: [
     '....xxxxxxxxxxx.....', '....xxxxxxxxxxx.....', '....xlllllllllx.....', '....llkkkllkkkl.....', '....lllylllllyl.....',
     '....llllllllllll....', '...vlllklkllllllv...', '....llllllllllll....', '....lkkkkkkkkkll....', '.....llllllllll.....',
@@ -829,6 +876,7 @@ const PORTRAIT = {
   richie: () => S.richie[0], buster: () => S.buster[0], mike: () => R.skeleton, pete: () => BG_SPR.pete,
   kidnapper: () => BG_SPR.kidnap, momreveal: () => BG_SPR.momreveal, radio: null, hennessey: () => S.man[0],
   mrshennessey: () => S.woman[0], mayor: () => S.man[0], narrator: null,
+  whitey: () => S.whitey[0], davey: () => S.davey[0], duke: () => BG_SPR.duke, grabinski: () => S.man[0], stinger: () => BG_SPR.stinger,
 };
 
 function drawSpr(img, x, y, flip = false) {
@@ -848,6 +896,10 @@ const THEMES = {
   fair: { sky: ['#140a24', '#5a2a6a'], far: '#1f1233', mid: 'fair', night: true, road: '#4a3a30', curb: '#6e4f2a', fence: 'lights', lamp: true, moon: '#ffe9a0', dirt: true },
   haunt: { sky: ['#120a14', '#241424'], far: '#1a0f1c', mid: 'haunt', night: true, road: '#2a1a1a', curb: '#3a2424', fence: 'none', lamp: false, dark: true },
   woods: { sky: ['#07040e', '#5a1f14'], far: '#120812', mid: 'woods', night: true, road: '#2a1f1a', curb: '#3a2a20', fence: 'none', lamp: false, moon: '#ffb07a', fog: true, dirt: true },
+  rink: { sky: ['#0a1830', '#3a5a8a'], far: '#14243a', mid: 'wintertown', night: true, road: '#c8dcf0', curb: '#8fa8c0', fence: 'iron', lamp: true, moon: '#dfe8ff', snow: true },
+  slope: { sky: ['#12233c', '#6a8cb8'], far: '#1a2c44', mid: 'wintertown', night: false, road: '#e8f2ff', curb: '#c8d8ea', fence: 'rail', lamp: false, snow: true },
+  court: { sky: ['#1a1420', '#2a2030'], far: '#1a1420', mid: 'court', night: true, road: '#8a6a3a', curb: '#5c3a1c', fence: 'none', lamp: false },
+  hall: { sky: ['#140a1c', '#2a1a3a'], far: '#1a0f24', mid: 'hall', night: true, road: '#6a4a2a', curb: '#3a2418', fence: 'none', lamp: true, moon: '#d8c8ff', snow: true },
 };
 const bgCache = {};
 function vgrad(g, x, y, w, h, c0, c1, steps = 12) {
@@ -1027,6 +1079,41 @@ function buildTheme(name) {
       mg.fillStyle = '#9a94a8'; mg.fillRect(px2 + 70, 96, 3, 30); mg.fillStyle = '#ffd23f'; mg.fillRect(px2 + 70, 92, 3, 4);
     }
     mg.fillStyle = '#1a0a10'; mg.fillRect(0, 128, 640, 22);
+  } else if (T.mid === 'wintertown') {
+    // Dukesberry: a rec-center block flanked by snow-capped houses
+    mg.fillStyle = '#0d1830'; mg.fillRect(220, 44, 150, 102);
+    mg.fillStyle = '#e8f2ff'; mg.fillRect(220, 42, 150, 4);
+    mg.fillStyle = '#8fd3ff'; for (let i = 0; i < 8; i++) mg.fillRect(232 + i * 17, 58, 10, 26);
+    mg.fillStyle = '#d83a3a'; mg.fillRect(270, 100, 62, 16);
+    mg.fillStyle = '#ffd23f'; for (let i = 0; i < 5; i++) mg.fillRect(278 + i * 11, 105, 6, 6);
+    let hx = 4;
+    while (hx < 640) {
+      if (hx > 200 && hx < 390) { hx = 390; continue; }
+      const w = drawHouse(mg, hx, base, rng, true);
+      mg.fillStyle = '#e8f2ff'; mg.fillRect(hx - 1, base - (34 + Math.floor(rng() * 12)), w + 2, 3);
+      hx += w + 10;
+      hx += 10 + Math.floor(rng() * 20);
+    }
+    mg.fillStyle = '#cfe8ff';
+    for (let ix = 6; ix < 640; ix += 22) { const len = 3 + Math.floor(rng() * 7); mg.fillRect(ix, base - 1, 2, len); }
+  } else if (T.mid === 'court') {
+    mg.fillStyle = '#2a1e12'; mg.fillRect(0, 0, 640, 150);
+    for (let bx = 0; bx < 640; bx += 90) {
+      mg.fillStyle = '#5c4428'; mg.fillRect(bx, base - 74, 74, 74);
+      for (let r = 0; r < 6; r++) { mg.fillStyle = r % 2 ? '#6a4a2a' : '#7e5a2e'; mg.fillRect(bx, base - 74 + r * 12, 74, 10); }
+      mg.fillStyle = '#d83a3a'; mg.fillRect(bx + 18, base - 96, 34, 16);
+      mg.fillStyle = '#ffd23f'; for (let i = 0; i < 4; i++) mg.fillRect(bx + 24 + i * 7, base - 92, 4, 6);
+    }
+  } else if (T.mid === 'hall') {
+    mg.fillStyle = '#241830'; mg.fillRect(0, 0, 640, 150);
+    for (let wx = 0; wx < 640; wx += 20) { mg.fillStyle = (wx / 20) % 2 ? '#2c1f3a' : '#221632'; mg.fillRect(wx, 0, 10, 150); }
+    for (let px2 = 40; px2 < 640; px2 += 140) {
+      mg.fillStyle = '#5c3a1c'; mg.fillRect(px2, 40, 26, 60);
+      mg.fillStyle = '#8fd3ff'; mg.fillRect(px2 + 4, 48, 18, 44);
+      mg.fillStyle = '#ffd23f';
+      for (let c = 0; c < 9; c++) mg.fillRect(px2 + 60 + Math.floor(c / 3) * 8, 90 - (c % 3) * 10, 2, 8);
+    }
+    mg.fillStyle = '#1a0f24'; mg.fillRect(0, 128, 640, 22);
   }
   const out = { sky, far, mid, T };
   bgCache[name] = out;
@@ -1095,6 +1182,22 @@ function drawFog(camX, time) {
   ctx.drawImage(fogCanvas, fx, 128); ctx.drawImage(fogCanvas, fx + 640, 128);
   const fx2 = -Math.floor((camX * 0.6 + time * 6) % 640);
   ctx.globalAlpha = 0.6; ctx.drawImage(fogCanvas, fx2, 100); ctx.drawImage(fogCanvas, fx2 + 640, 100); ctx.globalAlpha = 1;
+}
+const snowCanvas = (() => {
+  const [c, g] = makeCanvas(640, 160);
+  const rng = makeRng(140);
+  for (let i = 0; i < 130; i++) {
+    const s = rng() < 0.3 ? 2 : 1;
+    g.fillStyle = 'rgba(255,255,255,0.85)';
+    g.fillRect(Math.floor(rng() * 640), Math.floor(rng() * 160), s, s);
+  }
+  return c;
+})();
+function drawSnow(camX, time) {
+  const fall = Math.floor((time * 16) % 160);
+  const fx = -Math.floor((camX * 0.3) % 640);
+  ctx.drawImage(snowCanvas, fx, fall - 160); ctx.drawImage(snowCanvas, fx + 640, fall - 160);
+  ctx.drawImage(snowCanvas, fx, fall); ctx.drawImage(snowCanvas, fx + 640, fall);
 }
 const darkMask = makeCanvas(W, H);
 function drawDarkness(sx, sy, radius, extraLights) {
@@ -1177,6 +1280,8 @@ const PALS = {
   downey: { name: 'SGT. DOWNEY', color: '#7f9fec', power: 'POLICE WHISTLE BLASTS', line: "FINE. BUT I'M DOING THIS FOR VIOLET." },
   richie: { name: 'RICHIE', color: '#a8e0ff', power: 'FLYING TACKLES', line: "I'M NOT DANGEROUS! MOSTLY." },
   buster: { name: 'BUSTER', color: '#c0c0d0', power: 'BITES FOES, FETCHES CANDY', line: 'WOOF! (NOT A WEREWOLF.)' },
+  whitey: { name: 'WHITEY', color: '#ffcf3b', power: 'SLAPSHOT PUCKS ZING AT FOES', line: "WOULDN'T IT BE FUNNY IF I HAD A HOOK FOR A HAND? I DON'T. LET'S SKATE." },
+  davey: { name: 'DAVEY', color: '#9a94a8', power: 'THROWS BASKETBALLS AT FOES', line: "OKAY, ROOKIE. STAY BEHIND ME AND DON'T EMBARRASS US." },
 };
 
 const CAST = {
@@ -1185,6 +1290,8 @@ const CAST = {
   pete: ['PETE LANDOLFA', '#8fd36a'], mrshennessey: ['MRS. HENNESSEY', '#e0609a'], hennessey: ['MR. HENNESSEY', '#9a94a8'],
   radio: ['RADIO', '#ffd23f'], kidnapper: ['???', '#ff6a1f'], momreveal: ['MOM', '#e0609a'], mayor: ['MAYOR BENSON', '#9a94a8'],
   narrator: ['', '#c8c0e0'],
+  whitey: ['WHITEY DUVALL', '#ffcf3b'], davey: ['DAVEY STONE', '#9a94a8'], duke: ['DUKE MALLOY', '#3f6fd0'],
+  grabinski: ['OFFICER GRABINSKI', '#4a4658'], stinger: ['COACH STINGER', '#d83a3a'],
 };
 
 const LEVELS = [
@@ -1316,6 +1423,116 @@ const LEVELS = [
       ['narrator', "AND WHEN EVERYONE TURNS AROUND, HUBIE'S MOM HAS VANISHED INTO THE NIGHT."],
     ],
   },
+  {
+    title: 'THROUGH THE RIFT', place: 'DUKESBERRY TOWN POND', theme: 'rink', music: 'main', pal: 'whitey', boss: 'duke', icy: true,
+    plan: ['open', 'elves', 'pucks', 'cars', 'ramp', 'runners', 'crates', 'pucks', 'check', 'pal',
+      'elves', 'ramp', 'trash', 'pucks', 'sandwich', 'bigair', 'cars', 'elves', 'barriers', 'arena'],
+    intro: [
+      ["narrator", "SALEM'S TOWN SQUARE. THE CROWD IS STILL CHEERING WHEN THE SKY ITSELF SPLITS OPEN."],
+      ['hubie', 'UH, GUYS? THAT SKY THING LOOKS LIKE IT WANTS TO EAT ME.'],
+      ['violet', 'HUBIE, GET AWAY FROM IT!'],
+      ['narrator', 'TOO LATE. A CRACKLING, ICE-BLUE RIFT YANKS HUBIE OFF HIS BIKE AND SWALLOWS HIM WHOLE.'],
+      ['hubie', 'MOOOOOM—'],
+      ['narrator', 'HE LANDS WITH A THUD ON A FROZEN POND, IN A TOWN HE HAS NEVER SEEN. A SIGN CREAKS IN THE WIND: WELCOME TO DUKESBERRY.'],
+      ['whitey', "WHOA! DID YOU FALL OUT OF THE SKY? THAT'S USUALLY MY THING."],
+      ['hubie', "I'M HUBIE. HUBIE DUBOIS. IS IT STILL HALLOWEEN HERE?"],
+      ['whitey', "IT'S HANUKKAH SEASON, PAL. I'M WHITEY DUVALL, HEAD REFEREE OF THE DUKESBERRY REC CENTER. AND THAT GUY SKATING AT US? NOT FRIENDLY."],
+    ],
+    palIntro: [
+      ['whitey', "NEED A HAND? I KNOW THIS ICE BETTER THAN ANYONE. WELL, ME AND BENJAMIN. BENJAMIN'S A KID, NOT A REINDEER, BEFORE YOU ASK."],
+      ['hubie', "I WASN'T GOING TO ASK THAT."],
+      ['whitey', 'EVERYONE ASKS THAT.'],
+    ],
+    bossIntro: [
+      ['duke', "WELL LOOK WHO FELL OUT OF THE SKY. NEW KID WANTS TO SKATE ON MY POND?"],
+      ['whitey', "IT'S NOT YOUR POND, DUKE. IT'S THE TOWN'S POND."],
+      ['duke', 'SAME THING. TRICK-OR-TREATER GETS THE BOARDS.'],
+    ],
+    outro: [
+      ['duke', "FINE! FINE! I'M GOING! THIS ISN'T OVER, WHITEY!"],
+      ['whitey', "IT'S BEEN OVER SINCE 1987, DUKE."],
+      ['hubie', 'OKAY. GREAT. NEW TOWN, NEW BULLY, SAME THERMOS. HOW DO I GET HOME?'],
+      ['whitey', "NO IDEA. BUT MY BUDDY DAVEY MIGHT — HE ONCE GOT ARRESTED NEAR SOMETHING GLOWY ON THE MOUNTAIN. LET'S GO ASK HIM."],
+      ['narrator', 'A SNOWMOBILE ROARS TO LIFE SOMEWHERE ON THE HILL ABOVE TOWN. THIS DOES NOT SOUND LIKE GOOD NEWS.'],
+    ],
+  },
+  {
+    title: 'DOWNHILL DISASTER', place: 'MOUNT DUKESBERRY', theme: 'slope', music: 'main', boss: 'grabinski', icy: true,
+    plan: ['open', 'ramp', 'elves', 'bigair', 'crates', 'pucks', 'ramp', 'pit', 'check',
+      'elves', 'barriers', 'bigair', 'runners', 'ramp', 'sandwich', 'pucks', 'elves', 'arena'],
+    intro: [
+      ['narrator', 'THE ROAD UP MOUNT DUKESBERRY IS ALL ICE, HAIRPIN TURNS, AND ONE VERY SUSPICIOUS SECURITY GUARD.'],
+      ['whitey', "THAT'S OFFICER GRABINSKI. TECHNICALLY HE'S MALL SECURITY, NOT AN ACTUAL COP. DON'T TELL HIM THAT."],
+      ['hubie', 'WHY WOULD I TELL HIM THAT?!'],
+      ['whitey', 'PEOPLE DO. IT NEVER GOES WELL.'],
+    ],
+    bossIntro: [
+      ['grabinski', 'FREEZE! I SAW YOU LOOK AT THAT NO-SKIING SIGN FUNNY!'],
+      ['hubie', "I DIDN'T EVEN SEE A SIGN!"],
+      ['grabinski', 'EXACTLY MY POINT.'],
+    ],
+    outro: [
+      ['grabinski', 'OKAY! OKAY! MY SNOWMOBILE IS SMOKING! I YIELD TO THE... WHATEVER YOU ARE!'],
+      ['hubie', "I'M HUBIE! THE HALLOWEEN HELPER!"],
+      ['grabinski', "THAT'S NOT A REAL JOB TITLE."],
+      ['narrator', 'AT THE BOTTOM OF THE HILL, THE DUKESBERRY REC CENTER GYM GLOWS WITH COURT LIGHTS. A SCOREBOARD BUZZES.'],
+      ['whitey', "THAT'S WHERE DAVEY COACHES. IF ANYONE KNOWS HOW TO GET YOU HOME, IT'S THE GUY WHO'S BEEN TRYING TO LEAVE THIS TOWN FOR YEARS."],
+    ],
+  },
+  {
+    title: 'SLAM DUNK SHOWDOWN', place: 'DUKESBERRY REC CENTER', theme: 'court', music: 'main', pal: 'davey', boss: 'stinger',
+    plan: ['open', 'crates', 'elves', 'pucks', 'ramp', 'barriers', 'check', 'pal',
+      'elves', 'crates', 'bigair', 'runners', 'sandwich', 'elves', 'pucks', 'barriers', 'arena'],
+    intro: [
+      ['narrator', 'INSIDE THE GYM, A PEEWEE BASKETBALL GAME HAS GONE COMPLETELY OFF THE RAILS.'],
+      ['davey', 'WHO INVITED THE GUY WITH THE THERMOS?'],
+      ['whitey', 'DAVEY, THIS IS HUBIE. HE FELL OUT OF THE SKY. HE NEEDS TO GET HOME.'],
+      ['davey', "OH GREAT, ANOTHER GUY WITH PROBLEMS. FINE. HELP ME DEAL WITH COACH STINGER'S GOONS AND WE'LL TALK."],
+    ],
+    palIntro: [
+      ['davey', "ALRIGHT, ROOKIE, STAY BEHIND ME. I'VE BEEN THROWN OUT OF THIS GYM FOUR TIMES. I KNOW HOW IT WORKS."],
+      ['hubie', "THAT DOESN'T SOUND LIKE A GOOD THING."],
+      ['davey', "IT'S A GREAT THING. IT MEANS I KNOW ALL THE EXITS."],
+    ],
+    bossIntro: [
+      ['stinger', 'STONE! YOU BRING A CLOWN TO MY GYM? THIS IS A REC LEAGUE, NOT A CIRCUS!'],
+      ['davey', "IT'S ALWAYS BEEN A LITTLE BIT OF A CIRCUS, MARTY."],
+    ],
+    outro: [
+      ['stinger', 'FINE! TAKE THE COURT! TAKE THE WHOLE STUPID REC CENTER!'],
+      ['davey', 'FINALLY, SOMETHING GOOD OUT OF ONE OF THESE GAMES.'],
+      ['whitey', "DAVEY. THE PORTAL. TOWN HALL. TONIGHT'S THE PAGEANT — IF ANYTHING GLOWY IS GOING TO SHOW BACK UP, IT'S THERE."],
+      ['davey', 'OF COURSE IT IS. EVERYTHING WEIRD IN THIS TOWN HAPPENS AT THE HANUKKAH PAGEANT.'],
+      ['hubie', 'ONE MORE STOP. I CAN DO ONE MORE STOP.'],
+    ],
+  },
+  {
+    title: 'THE WINTER PAGEANT', place: 'DUKESBERRY TOWN HALL', theme: 'hall', music: 'main', boss: 'duke2',
+    plan: ['open', 'crates', 'elves', 'pucks', 'ramp', 'barriers', 'check',
+      'elves', 'pucks', 'bigair', 'sandwich', 'crates', 'elves', 'pail', 'arena'],
+    intro: [
+      ['narrator', 'TOWN HALL. THE ENTIRE TOWN HAS PACKED IN FOR THE HANUKKAH PAGEANT. SOMEWHERE UP THERE, A RIFT IS SUPPOSEDLY WAITING.'],
+      ['whitey', 'IF WE\'RE RIGHT, IT SHOWS UP DURING MY SKATING NUMBER. NO PRESSURE.'],
+      ['davey', "THERE'S ALWAYS PRESSURE AT THIS THING. THAT'S WHY I USUALLY DRINK THROUGH IT."],
+      ['hubie', 'PLEASE DO NOT DRINK THROUGH IT.'],
+      ['davey', "FINE. I'LL DRINK AFTER."],
+    ],
+    bossIntro: [
+      ['narrator', 'THE DOORS BLOW OPEN. DUKE MALLOY STANDS THERE, STILL SOAKING WET, STILL FURIOUS.'],
+      ['duke', "YOU EMBARRASSED ME ON MY OWN ICE. NOBODY EMBARRASSES DUKE MALLOY AT HIS OWN TOWN'S PAGEANT!"],
+      ['whitey', "IT'S NOT YOUR PAGEANT EITHER, DUKE."],
+      ['duke', 'EVERYTHING IN THIS TOWN IS MINE IF I SAY IT LOUD ENOUGH!'],
+    ],
+    outro: [
+      ['narrator', 'DUKE SKIDS OUT THE DOOR ON HIS BACK. ABOVE THE STAGE, THE SKY CRACKS OPEN — THE SAME ICE-BLUE RIFT.'],
+      ['whitey', "THAT'S OUR CUE! GO GET HOME, HUBIE!"],
+      ['hubie', 'WAIT. I NEVER GOT TO SEE YOUR SKATING NUMBER.'],
+      ['whitey', 'WATCH.'],
+      ['narrator', 'WHITEY GLIDES ONTO THE ICE CENTER STAGE AND LANDS A PERFECT SPIN. THE TOWN GOES WILD.'],
+      ['davey', 'OKAY. THAT PART WAS ACTUALLY GREAT.'],
+      ['narrator', 'HUBIE WAVES GOODBYE AS THE RIFT PULLS HIM BACK THROUGH, SPINNING PAST STARS, PUMPKINS, AND ONE VERY CONFUSED MENORAH.'],
+    ],
+  },
 ];
 
 const EPILOGUE = [
@@ -1323,7 +1540,11 @@ const EPILOGUE = [
   ['narrator', 'HUBIE DUBOIS IS MARRIED TO VIOLET VALENTINE, AND HE IS THE NEW MAYOR OF SALEM.'],
   ['violet', 'HAPPY HALLOWEEN, MAYOR DUBOIS.'],
   ['hubie', 'HAPPY HALLOWEEN, MRS. DUBOIS! NOW, WHO WANTS TO GO TRICK-OR-TREATING?'],
-  ['narrator', 'THE KIDS HEAD OUT IN THEIR COSTUMES, DRESSED AS THE PEOPLE THEY KNOW BEST.'],
+  ['narrator', "A FAMILIAR ICE-BLUE LIGHT FLICKERS BY THE TOWN SQUARE FOUNTAIN. TWO FIGURES STEP OUT: WHITEY AND DAVEY, CARRYING A FRUITCAKE."],
+  ['whitey', "SURPRISE! WE FIGURED OUT HOW THE RIFT WORKS. TURNS OUT IT'S ALWAYS BEEN A TWO-WAY DOOR."],
+  ['davey', 'DUKESBERRY SAYS HI. ALSO, WE MAY HAVE LET DUKE FOLLOW US HERE. SORRY.'],
+  ['hubie', "THAT'S OKAY. WE HAVE EXPERIENCE WITH BULLIES IN THIS TOWN."],
+  ['narrator', 'THE KIDS HEAD OUT IN THEIR COSTUMES, DRESSED AS THE PEOPLE THEY KNOW BEST — INCLUDING, THIS YEAR, A REC-LEAGUE REFEREE AND A GUY IN A DENIM JACKET.'],
   ['narrator', 'AND NOBODY THROWS A SINGLE EGG AT HUBIE. MOSTLY.'],
 ];
 
@@ -1368,6 +1589,8 @@ const ENEMY_DEFS = {
   crow: { w: 10, h: 5, hp: 1, pts: 60, candy: 1, img: () => [SM.crow0, SM.crow1], fly: true },
   bat: { w: 10, h: 5, hp: 1, pts: 60, candy: 1, img: () => [SM.bat0, SM.bat1], fly: true },
   window: { w: 16, h: 16, hp: 1, pts: 120, candy: 2, img: () => null },
+  elf: { w: 12, h: 20, hp: 2.5, pts: 160, candy: 3, img: () => S.elf, speed: 32 },
+  puck: { w: 8, h: 4, hp: 1, pts: 70, candy: 1, img: () => [SM.puck0, SM.puck1], fly: true },
 };
 
 function makeEnemy(type, x, y, extra = {}) {
@@ -1478,6 +1701,16 @@ const CHUNKS = (() => {
       return 250;
     },
     crows: (L, x) => C.bats(L, x),
+    elves: (L, x) => {
+      en(L, 'elf', x + 110); en(L, 'elf', x + 170); en(L, 'elf', x + 230);
+      row(L, x + 40, GROUND - 10, 5);
+      return 270;
+    },
+    pucks: (L, x) => {
+      en(L, 'puck', x + 100, GROUND - 55); en(L, 'puck', x + 150, GROUND - 75); en(L, 'puck', x + 210, GROUND - 50);
+      row(L, x + 60, GROUND - 44, 5);
+      return 250;
+    },
     vampires: (L, x) => {
       en(L, 'vampire', x + 110, GROUND - 76); en(L, 'vampire', x + 220, GROUND - 64);
       row(L, x + 40, GROUND - 10, 4); arc(L, x + 150, GROUND - 30, 4, 40, 20);
@@ -1689,12 +1922,13 @@ function updatePlayer(dt) {
   if (P.bailT > 0) P.bailT -= dt;
 
   // ---- horizontal control
+  const icy = L.def.icy;
   const dir = control ? (Input.down('right') ? 1 : 0) - (Input.down('left') ? 1 : 0) : (L.won ? 1 : 0);
   if (dir !== 0) {
-    P.vx += dir * (P.onGround ? 340 : 210) * dt;
+    P.vx += dir * (P.onGround ? (icy ? 250 : 340) : 210) * dt;
     if (P.onGround || !P.trick) P.face = dir;
   } else {
-    const fr = P.onGround ? 230 : 40;
+    const fr = P.onGround ? (icy ? 130 : 230) : 40;
     P.vx -= sign(P.vx) * Math.min(Math.abs(P.vx), fr * dt);
   }
   P.vx = clamp(P.vx, L.won ? 0 : -130, 155);
@@ -2016,6 +2250,19 @@ function updatePals(dt) {
         Sound.play(id === 'richie' ? 'tackle' : 'bark'); st.say = 0.8; st.sayText = id === 'richie' ? 'HUT HUT!' : 'WOOF!';
         st.cd = id === 'richie' ? 4.5 : 3.5;
       } else st.cd = 0.4;
+    } else if (id === 'whitey') {
+      const e = nearestEnemy(cx, cy, 200, (en) => (en.x - cx) * P.face > 0);
+      if (e) {
+        L.shots.push({ x: cx + P.face * 6, y: cy, vx: 340 * P.face, vy: 0, dmg: 1.5, life: 0.7, pierce: true, hit: new Set(), kind: 'puckshot' });
+        Sound.play('whistle'); st.say = 1.0; st.sayText = 'HEADS UP!'; st.cd = 1.7;
+      } else st.cd = 0.3;
+    } else if (id === 'davey') {
+      const e = nearestEnemy(cx, cy, 190);
+      if (e) {
+        const T = 0.55, tx = e.x + e.w / 2 + e.vx * T, ty = e.y + e.h / 2;
+        L.shots.push({ x: cx, y: cy - 6, vx: (tx - cx) / T, vy: (ty - cy + 6 - 0.5 * 420 * T * T) / T, grav: 420, dmg: 2, life: 1.3, hit: new Set(), kind: 'basketball' });
+        Sound.play('lob'); st.say = 1.0; st.sayText = 'SWISH!'; st.cd = 1.6;
+      } else st.cd = 0.3;
     }
   });
 }
@@ -2124,7 +2371,7 @@ function updateEnemy(e, dt) {
       if (e.shut) break;
       if (e.cd <= 0 && dx > -40 && dx < 170) { throwAt(Math.random() < 0.5 ? 'egg' : 'tp', cx, e.y + 8, px + P.vx * 0.5, py, 0.8, 320); e.cd = rand(1.8, 2.6); e.throwT = 0.3; }
       break;
-    case 'skeleton': case 'mummy':
+    case 'skeleton': case 'mummy': case 'elf':
       if (adx < 240) { e.vx = sign(dx) * d.speed; e.moving = true; } else e.vx = 0;
       e.x += e.vx * dt;
       break;
@@ -2180,8 +2427,8 @@ function updateEnemy(e, dt) {
       if (e.cd <= 0 && adx < 90) { L.eshots.push({ kind: 'potion', x: cx, y: e.y + e.h, vx: -20, vy: 20, grav: 380, w: 5, h: 6, life: 4, t: 0 }); e.cd = rand(1.4, 2.0); }
       if (e.x < L.camX - 60) e.dead = true;
       break;
-    case 'crow': case 'bat': {
-      const sp = e.type === 'crow' ? 85 : 65;
+    case 'crow': case 'bat': case 'puck': {
+      const sp = e.type === 'crow' ? 85 : e.type === 'puck' ? 135 : 65;
       e.vx = lerp(e.vx, sign(dx) * sp, 0.03);
       e.baseY = lerp(e.baseY, py - 6, e.type === 'crow' ? 0.02 : 0.012);
       e.x += e.vx * dt;
@@ -2338,6 +2585,8 @@ function drawShots() {
   for (const s of L.shots) {
     const sx = Math.round(s.x - L.camX), sy = Math.round(s.y);
     if (s.kind === 'apple') ctx.drawImage(SM.apple, sx - 2, sy - 2);
+    else if (s.kind === 'basketball') ctx.drawImage(SM.basketball, sx - 2, sy - 2);
+    else if (s.kind === 'puckshot') ctx.drawImage(SM.puckshot, sx - 2, sy - 1);
     else if (s.kind === 'ring') { ctx.strokeStyle = '#7f9fec'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(sx, sy, 4, -1.2, 1.2); ctx.stroke(); ctx.beginPath(); ctx.arc(sx - 3, sy, 3, -1.2, 1.2); ctx.stroke(); }
     else if (s.flare) ctx.drawImage(SM.flare, sx - 3, sy - 2);
     else ctx.drawImage(SM.soup, sx - 2, sy - 2);
@@ -2444,13 +2693,17 @@ const BOSS_INFO = {
   wagon: { name: 'THE HENNESSEYS', hp: 70, w: 70, h: 26 },
   pete: { name: 'PETE LANDOLFA', hp: 96, w: 18, h: 28 },
   kidnapper: { name: 'THE KIDNAPPER', hp: 130, w: 18, h: 28 },
+  duke: { name: 'DUKE MALLOY', hp: 150, w: 18, h: 19 },
+  grabinski: { name: 'OFFICER GRABINSKI', hp: 190, w: 70, h: 26 },
+  stinger: { name: 'COACH STINGER', hp: 230, w: 18, h: 19 },
+  duke2: { name: 'DUKE MALLOY (FURIOUS)', hp: 280, w: 18, h: 19 },
 };
 function spawnBoss(kind) {
   const ax = L.arenaX, info = BOSS_INFO[kind];
   const e = { type: 'boss', kind, boss: true, name: info.name, x: ax + W - 70, y: GROUND - info.h, w: info.w, h: info.h, hp: info.hp, maxHp: info.hp,
     vx: 0, vy: 0, face: -1, t: 0, st: 0, state: 'intro', cd: 1.2, onGround: true, active: true, stun: 0, flash: 0, anim: 0, inv: 0,
     def: { fly: false, pts: 2500, candy: 0 }, stompCd: 0 };
-  if (kind === 'wagon') { e.x = ax + W + 20; e.state = 'enter'; }
+  if (kind === 'wagon' || kind === 'grabinski') { e.x = ax + W + 20; e.state = 'enter'; }
   if (kind === 'mike') { e.targetX = ax + 40; e.state = 'ride'; }
   if (kind === 'kidnapper') e.x = ax + W - 50;
   L.enemies.push(e); L.boss = e;
@@ -2476,7 +2729,7 @@ function bossThrowEgg(e, kind = 'egg', spread = 0) {
 }
 function updateBoss(e, dt) {
   e.flash = Math.max(0, e.flash - dt); e.inv = Math.max(0, e.inv - dt); e.stompCd = Math.max(0, e.stompCd - dt);
-  if (e.down) { e.t += dt; if (e.kind === 'wagon' && Math.random() < 0.3) FX.parts.push({ x: e.x + 60, y: e.y + 8, vx: rand(-10, 10), vy: -30, life: 0.9, color: '#4a4658', size: 2, grav: -10 }); return; }
+  if (e.down) { e.t += dt; if ((e.kind === 'wagon' || e.kind === 'grabinski') && Math.random() < 0.3) FX.parts.push({ x: e.x + 60, y: e.y + 8, vx: rand(-10, 10), vy: -30, life: 0.9, color: '#4a4658', size: 2, grav: -10 }); return; }
   if (e.stun > 0) { e.stun = Math.min(e.stun, 1.0) - dt; return; }
   e.t += dt; e.st += dt; e.anim += dt; e.cd -= dt;
   const ax = L.arenaX, dx = P.x - (e.x + e.w / 2);
@@ -2560,6 +2813,60 @@ function updateBoss(e, dt) {
     }
     e.x = clamp(e.x, ax + 4, ax + W - e.w - 4);
     if (Math.random() < 0.6) FX.parts.push({ x: e.x + (e.face > 0 ? e.w + 2 : -2), y: e.y + 12, vx: rand(-8, 8), vy: -35, life: 0.35, color: choose(['#ff6a1f', '#ffd23f']), size: 1, grav: -20 });
+  } else if (e.kind === 'duke' || e.kind === 'duke2') {
+    if (e.state === 'intro') { e.state = 'skate'; e.targetX = ax + 40; }
+    if (e.state === 'skate') {
+      const d = e.targetX - (e.x + e.w / 2);
+      e.vx = sign(d) * (angry ? 130 : 95); e.face = sign(d) || e.face;
+      if (Math.abs(d) < 8) { e.targetX = e.targetX < ax + W / 2 ? ax + W - 30 : ax + 30; e.state = 'throw'; e.st = 0; e.b1 = false; e.b2 = false; e.vx = 0; }
+      if (e.cd <= 0) { bossThrowEgg(e); e.cd = angry ? 0.7 : 1.05; }
+      e.x += e.vx * dt;
+      for (let i = 0; i < 2; i++) if (Math.random() < 0.4) FX.parts.push({ x: e.x + e.w / 2, y: GROUND - 1, vx: rand(-6, 6), vy: -12, life: 0.35, color: '#cfe8ff', size: 1, grav: 10 });
+    } else if (e.state === 'throw') {
+      e.face = sign(dx) || -1;
+      if (e.st > 0.3 && !e.b1) { e.b1 = true; for (const s of [-30, 30]) bossThrowEgg(e, 'egg', s); }
+      if (furious && e.st > 0.6 && !e.b2) { e.b2 = true; e.state = 'charge'; e.st = 0; e.vx = (sign(dx) || e.face) * 210; }
+      else if (e.st > 1.0) e.state = 'skate';
+    } else if (e.state === 'charge') {
+      e.x += e.vx * dt;
+      if (Math.random() < 0.5) FX.parts.push({ x: e.x + e.w / 2, y: GROUND - 2, vx: rand(-10, 10), vy: -14, life: 0.4, color: '#cfe8ff', size: 1, grav: 10 });
+      if (e.st > 0.6) { e.state = 'skate'; e.st = 0; }
+    }
+    e.x = clamp(e.x, ax + 4, ax + W - e.w - 4);
+  } else if (e.kind === 'grabinski') {
+    if (e.state === 'enter') { e.x -= 140 * dt; if (e.x <= ax + W - 96) { e.state = 'throw'; e.st = 0; e.cd = 0.4; } }
+    else if (e.state === 'throw') {
+      if (e.cd <= 0) { throwAt('egg', e.x + 26, e.y + 2, P.x + P.vx * 0.4, P.y - 12, 0.85, 380); e.cd = angry ? 0.5 : 0.8; }
+      if (e.st > (angry ? 2.0 : 2.8)) { e.state = 'siren'; e.st = 0; Sound.play('siren'); FX.text(e.x + 20, e.y - 10, 'PULL OVER!', '#ff3b3b'); }
+    } else if (e.state === 'siren') {
+      e.x += Math.sin(e.st * 60) * 0.5;
+      if (e.st > 0.7) { e.state = 'charge'; e.st = 0; }
+    } else if (e.state === 'charge') {
+      e.x -= (angry ? 260 : 220) * dt;
+      if (Math.random() < 0.5) FX.parts.push({ x: e.x + e.w, y: GROUND - 4, vx: 30, vy: -10, life: 0.5, color: '#cfe8ff', size: 2, grav: 0 });
+      if (e.x <= ax + 4) { e.x = ax + 4; e.state = 'reverse'; e.st = 0; FX.shake = 3; Sound.play('bonk'); }
+    } else if (e.state === 'reverse') {
+      e.x += 80 * dt;
+      if (e.cd <= 0 && angry) { throwAt('egg', e.x + 26, e.y + 2, P.x, P.y - 12, 0.7, 380); e.cd = 0.9; }
+      if (e.x >= ax + W - 96) { e.state = 'throw'; e.st = 0; }
+    }
+  } else if (e.kind === 'stinger') {
+    if (e.state === 'intro' || e.state === 'walk') {
+      if (e.state === 'intro') e.state = 'walk';
+      e.face = sign(dx) || -1; e.x += e.face * (angry ? 44 : 34) * dt;
+      if (e.st > 2.0) { e.st = 0; e.state = angry && Math.random() < 0.4 ? 'whistle' : 'lunge'; }
+    } else if (e.state === 'lunge') {
+      if (e.st < dt * 1.5) e.vx = clamp((P.x - (e.x + e.w / 2)) / 0.5, -190, 190);
+      e.x += e.vx * dt;
+      if (e.st > 0.5) { e.state = 'walk'; e.st = 0; }
+    } else if (e.state === 'whistle') {
+      if (e.st < dt * 1.5) {
+        FX.text(e.x + 9, e.y - 8, 'TWEEEET!', '#ffd23f'); Sound.play('whistle');
+        for (let i = 0; i < 2; i++) L.enemies.push(makeEnemy('elf', e.x + (i ? 20 : -10), null, { active: true }));
+      }
+      if (e.st > 0.9) { e.state = 'walk'; e.st = 0; }
+    }
+    e.x = clamp(e.x, ax + 4, ax + W - e.w - 4);
   }
   // contact with Hubie: stomp from above or get hurt
   if (!P.dead && overlap(pbox(P), e)) {
@@ -2582,6 +2889,8 @@ function bossDefeated(e) {
   if (e.kind === 'mike') { e.hidden = true; L.kos.push({ img: R.skeleton, x: e.x, y: e.y, vx: -e.face * 60, vy: -260, rot: 0, vr: 9, flip: e.face < 0 }); }
   if (e.kind === 'pete') { e.hidden = true; L.kos.push({ img: BG_SPR.pete, x: e.x, y: e.y, vx: -e.face * 50, vy: -240, rot: 0, vr: 7, flip: false }); }
   if (e.kind === 'kidnapper') { e.revealed = true; L.kos.push({ img: SM.pumpkinSm, x: e.x + 6, y: e.y + 2, vx: 90, vy: -300, rot: 0, vr: 12, flip: false }); for (const v of L.victims) freeVictim(v, true); }
+  if (e.kind === 'duke' || e.kind === 'duke2') { e.hidden = true; L.kos.push({ img: BG_SPR.duke, x: e.x, y: e.y, vx: -e.face * 55, vy: -250, rot: 0, vr: 8, flip: e.face < 0 }); }
+  if (e.kind === 'stinger') { e.hidden = true; L.kos.push({ img: BG_SPR.stinger, x: e.x, y: e.y, vx: -e.face * 50, vy: -240, rot: 0, vr: 7, flip: false }); }
 }
 function drawBoss(e) {
   if (e.hidden) {
@@ -2604,6 +2913,13 @@ function drawBoss(e) {
       ctx.fillStyle = '#7e5a2e'; ctx.fillRect(tx, sy + 12, 2, 10);
       ctx.fillStyle = '#ff6a1f'; ctx.fillRect(tx - 1, sy + 8, 4, 4); ctx.fillStyle = '#ffd23f'; ctx.fillRect(tx, sy + 9, 2, 2);
     }
+  } else if (e.kind === 'duke' || e.kind === 'duke2') {
+    drawSpr(BG_SPR.duke, sx - 1, sy, e.face < 0);
+  } else if (e.kind === 'grabinski') {
+    drawSpr(CRUISER[Math.floor(e.t * 8) % 2], sx - 1, sy - 4, true);
+  } else if (e.kind === 'stinger') {
+    const bob = e.state === 'walk' ? Math.floor(e.t * 5) % 2 : 0;
+    drawSpr(BG_SPR.stinger, sx - 1, sy + bob, e.face < 0);
   }
   if (e.stun > 0) for (let i = 0; i < 3; i++) { const a = e.t * 6 + (i * Math.PI * 2) / 3; ctx.fillStyle = '#ffd23f'; ctx.fillRect(Math.round(sx + e.w / 2 + Math.cos(a) * 9), Math.round(sy - 4 + Math.sin(a) * 2), 2, 2); }
 }
@@ -2894,6 +3210,7 @@ function drawWorld() {
   }
   drawPals(); drawPlayer(); drawShots(); drawEshots(); drawKOs(); FX.draw(L.camX); drawRings();
   if (THEMES[themeNow].fog) drawFog(L.camX, L.time);
+  if (THEMES[themeNow].snow) drawSnow(L.camX, L.time);
   if (dark) {
     const lights = [];
     for (const hz of L.hazards) if (hz.kind === 'fire' && !hz.dead) lights.push({ x: hz.x + 8 - L.camX, y: GROUND - 6, r: 34 });
@@ -3129,7 +3446,12 @@ function updateComplete() {
   if (stateT > 0.6 && (Input.confirm() || Input.takeClick())) {
     Sound.play('confirm');
     if (run.level >= LEVELS.length - 1) { startStory(EPILOGUE, () => { Sound.playMusic('happy'); setState('credits'); }, 'epilogue'); }
-    else { momLine = choose(run.level === LEVELS.length - 2 ? ["GO GET 'EM, HUBIE. I'LL BE... AROUND."] : MOM_LINES); shopSel = 0; setState('shop'); }
+    else {
+      momLine = choose(run.level === 4 ? ["GO GET 'EM, HUBIE. I'LL BE... AROUND."]
+        : run.level === 5 ? ['I DON\'T KNOW WHAT THAT WEIRD LIGHT IN THE SKY IS, BUT I ALREADY HATE IT.']
+        : MOM_LINES);
+      shopSel = 0; setState('shop');
+    }
   }
 }
 function drawComplete() {
