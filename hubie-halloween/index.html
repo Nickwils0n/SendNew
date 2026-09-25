@@ -3115,8 +3115,11 @@ function completeLevel() {
 }
 function updateCamera() {
   if (L.lockL != null) { L.camX = lerp(L.camX, L.lockL, 0.12); if (Math.abs(L.camX - L.lockL) < 0.5) L.camX = L.lockL; return; }
-  const target = clamp(P.x - (P.face > 0 ? 108 : 210), 0, L.len - W);
-  L.camX = lerp(L.camX, target, 0.1);
+  // Fixed side-scroller framing: Hubie stays at a constant point on screen
+  // regardless of which way he's facing, instead of the camera re-centering
+  // (and panning the whole background) every time he turns around.
+  const target = clamp(P.x - 110, 0, L.len - W);
+  L.camX = lerp(L.camX, target, 0.14);
 }
 function updateVictims(dt) { for (const v of L.victims) if (v.freed) { v.t += dt; v.x += v.vx * dt; } }
 
