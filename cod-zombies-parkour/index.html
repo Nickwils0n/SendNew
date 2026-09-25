@@ -64,6 +64,14 @@
   #hud .holdout .timer { font-size: 26px; color: var(--purple); font-weight: bold; text-shadow: 0 0 10px rgba(176,107,255,0.7); }
   #hud .holdout .chargebar { width: 220px; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; margin-top: 3px; }
   #hud .holdout .chargefill { height: 100%; width: 0%; background: linear-gradient(90deg, #b06bff, #5be3ff); }
+  #hud .bosswrap { position: absolute; top: calc(90px + env(safe-area-inset-top,0px)); left: 50%; transform: translateX(-50%); text-align: center; display: none; width: min(480px, 84vw); }
+  #hud .bosswrap.show { display: block; }
+  #hud .bosswrap .bname { color: var(--red); font-size: 13px; letter-spacing: 0.1em; font-weight: bold; text-shadow: 0 0 8px rgba(255,59,59,0.6); }
+  #hud .bosswrap .bbar-track { width: 100%; height: 10px; background: rgba(255,255,255,0.08); border-radius: 5px; overflow: hidden; margin-top: 3px; border: 1px solid var(--panel-edge); }
+  #hud .bosswrap .bbar-fill { height: 100%; background: linear-gradient(90deg, #ff3b3b, #ff9f3b); width: 100%; transition: width 0.15s; }
+  #hud .allies { position: absolute; bottom: calc(74px + env(safe-area-inset-bottom,0px)); right: 16px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  #hud .allyicon { background: var(--panel); border-radius: 4px; padding: 3px 9px; font-size: 10px; display: flex; align-items: center; gap: 6px; }
+  #hud .allyicon .dot { width: 7px; height: 7px; border-radius: 50%; }
 
   #roundOverlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 40; opacity: 0; }
   #roundOverlay .txt { font-size: min(14vw, 90px); font-weight: 900; letter-spacing: 0.05em; font-style: italic;
@@ -150,6 +158,8 @@
   </div>
   <div class="partylist" id="hudParty"></div>
   <div class="holdout" id="hudHoldout"><div class="timer" id="hudHoldoutTime">3:00</div><div class="chargebar"><div class="chargefill" id="hudCharge"></div></div></div>
+  <div class="bosswrap" id="hudBoss"><div class="bname" id="hudBossName">BOSS</div><div class="bbar-track"><div class="bbar-fill" id="hudBossFill"></div></div></div>
+  <div class="allies" id="hudAllies"></div>
   <div class="bottom">
     <div class="healthwrap"><div class="hbtxt">HEALTH</div><div class="hbar-track"><div class="hbar-fill" id="hudHealthFill"></div></div></div>
     <div class="ammo"><div class="wname" id="hudWeapon">PISTOL</div><div class="anum"><span id="hudMag">8</span> <span class="res">/ <span id="hudReserve">32</span></span></div></div>
@@ -179,7 +189,7 @@
 <div id="overlay">
   <div class="panel" id="panelMenu">
     <h1>ANOMALY PROTOCOL</h1>
-    <div class="sub">A ZOMBIES-STYLE PARKOUR CAMPAIGN · 3 MAPS · CO-OP</div>
+    <div class="sub">A ZOMBIES-STYLE PARKOUR CAMPAIGN · 7 MAPS · CO-OP<br>CH.2: AN EIGHT CRAZY NIGHTS-INSPIRED RIFT</div>
     <div class="tabs">
       <div class="tab active" data-tab="play">PLAY</div>
       <div class="tab" data-tab="howto">HOW TO PLAY</div>
@@ -212,8 +222,11 @@
         <b>VAULT</b> low ledges are climbed automatically when you run at them.<br>
         <b>FIRE</b> Left Click &nbsp; <b>RELOAD</b> <span class="keytag">R</span> &nbsp; <b>INTERACT / BUY</b> <span class="keytag">E</span><br>
         <b>SWITCH WEAPON</b> <span class="keytag">1</span> / <span class="keytag">2</span> &nbsp; <b>PAUSE</b> <span class="keytag">Esc</span><br><br>
-        Kill zombies for points, buy weapons and ammo off the wall, open barricaded doors to push into new
-        sectors, and follow the glowing objective prompt through all 3 maps to complete the campaign.
+        Kill enemies for points, buy weapons and ammo off the wall, open barricaded doors to push into new
+        sectors, and follow the glowing objective prompt through the campaign.<br><br>
+        After Map 3's portal, the campaign continues into a 2nd chapter inspired by <b>Eight Crazy Nights</b> —
+        ice-skate and ski on low-friction surfaces (momentum carries, so ease off the stick to turn), recruit
+        <b>allies</b> who fight at your side, and take down 4 corrupted boss encounters.
       </div>
     </div>
   </div>
@@ -266,6 +279,10 @@ const WALLRUN_MIN_SPEED = 3.0;
 const WALLRUN_EJECT_OUT = 8.5;
 const WALLRUN_EJECT_UP = 9.5;
 const WALLRUN_MIN_AIR_TIME = 0.12;
+const SKI_ACCEL = 15;
+const SKI_MAX_SPEED = 19;
+const SLIPPERY_FRICTION_MULT = 0.1;
+const SLIPPERY_ACCEL_MULT = 0.35;
 const VAULT_TIME = 0.34;
 const VAULT_MIN_H = 0.35;
 const VAULT_MAX_H = 1.75;
@@ -574,11 +591,14 @@ const World = {
   vaultMeshes: [],     // low obstacles eligible for auto-vault
   floorMeshes: [],     // ground raycast targets (probed downward)
   ceilingMeshes: [],   // overhead raycast targets (probed upward, stops a jump's rise)
+  iceMeshes: [],       // floor surfaces tagged low-friction (ice-skating rinks)
+  skiMeshes: [],       // floor surfaces tagged low-friction + downhill slope accel (ski slopes)
   hazards: [],         // { box, kind:'pit'|'lava', damage }
   bounds: new THREE.Box3(V3(-40, -20, -40), V3(40, 40, 40)),
   reset() {
     this.colliders.length = 0; this.wallrunMeshes.length = 0; this.vaultMeshes.length = 0;
     this.floorMeshes.length = 0; this.ceilingMeshes.length = 0; this.hazards.length = 0;
+    this.iceMeshes.length = 0; this.skiMeshes.length = 0;
     this.spawnPoints.length = 0; this.interactables.length = 0;
     this.triggerZones.length = 0; this.colliderMeshCache = null;
   },
@@ -596,6 +616,8 @@ const World = {
     if (opts.wallrun) this.wallrunMeshes.push(mesh);
     if (opts.vault) this.vaultMeshes.push(mesh);
     if (opts.floor !== false) this.floorMeshes.push(mesh);
+    if (opts.ice) this.iceMeshes.push(mesh);
+    if (opts.ski) this.skiMeshes.push(mesh);
     return box;
   },
   addHazard(box, kind, damage) { this.hazards.push({ box, kind, damage }); },
@@ -608,8 +630,10 @@ const World = {
 // Forward-declared namespace: zombie/round/network-authority logic (05/07) attaches
 // its methods here at load time; weapon code (04) only *calls* them at runtime.
 const Game = {
-  state: { points: 0, mapIndex: 0, flags: {} },
+  state: { points: 0, mapIndex: 0, flags: {}, allyRoster: [] },
   zombies: new Map(),      // id -> Zombie (host: authoritative; client: rendered from snapshots)
+  bosses: new Map(),       // id -> Boss (map-scoped scripted encounters; same host/client split as zombies)
+  allies: new Map(),       // id -> Ally (recruited companions; persist across map loads via state.allyRoster)
   remoteAvatars: new Map(), // peerId -> RemoteAvatar
   local: null,             // this machine's PlayerController
 };
@@ -622,8 +646,11 @@ function castAgainst(meshes, origin, dir, maxDist) {
   const hits = _ray.intersectObjects(meshes, false);
   return hits.length ? hits[0] : null;
 }
+function groundProbe(pos, maxDrop = 6) {
+  return castAgainst(World.floorMeshes, V3(pos.x, pos.y + 0.05, pos.z), V3(0, -1, 0), maxDrop);
+}
 function groundHeightBelow(pos, maxDrop = 6) {
-  const hit = castAgainst(World.floorMeshes, V3(pos.x, pos.y + 0.05, pos.z), V3(0, -1, 0), maxDrop);
+  const hit = groundProbe(pos, maxDrop);
   return hit ? hit.point.y : null;
 }
 function resolveHorizontalCollisions(pos, radius) {
@@ -977,6 +1004,7 @@ class PlayerController {
     this.pos = V3(0, 0, 0); // feet position; camera adds PLAYER_EYE on top
     this.vel = V3();
     this.onGround = false; this.airTime = 0; this.usedDoubleJump = false;
+    this.onIce = false; this.onSki = false; this.skiNormal = null;
     this.wallRun = null; this.wallCooldown = 0;
     this.vaultT = -1; this.vaultFrom = V3(); this.vaultTo = V3();
     this.health = MAX_HEALTH; this.maxHealth = MAX_HEALTH;
@@ -1075,12 +1103,15 @@ class PlayerController {
     const dir = camera.getWorldDirection(V3());
     dir.x += rand(-def.spread, def.spread); dir.y += rand(-def.spread, def.spread); dir.z += rand(-def.spread, def.spread);
     dir.normalize();
-    const { zombie, point, head } = Game.raycastZombies(origin, dir, 60);
+    const { zombie, boss, point, head } = Game.raycastZombies(origin, dir, 60);
     const endPoint = point || origin.clone().addScaledVector(dir, 60);
     FX.tracer(origin.clone().addScaledVector(dir, 0.5), endPoint, def.pap ? 0xb06bff : 0xfff2c0);
     if (zombie) {
       const dmg = def.dmg * (head ? def.headMult : 1);
       Game.reportHit(zombie, dmg, head, point);
+    } else if (boss) {
+      const dmg = def.dmg * (head ? def.headMult : 1);
+      Game.reportBossHit(boss, dmg, head, point);
     } else {
       const meshes = World.colliderMeshCache || (World.colliderMeshCache = World.colliders.map((c) => c.mesh).filter(Boolean));
       const worldHit = castAgainst(meshes, origin, dir, 60);
@@ -1180,10 +1211,22 @@ class PlayerController {
       }
     } else {
       if (this.onGround) {
+        const slippery = this.onIce || this.onSki;
+        const fricMult = slippery ? SLIPPERY_FRICTION_MULT : 1;
         const sp = Math.hypot(this.vel.x, this.vel.z);
-        if (sp > 0) { const drop = sp * GROUND_FRICTION * dt; const scale = Math.max(0, sp - drop) / sp; this.vel.x *= scale; this.vel.z *= scale; }
-        accelerate(this.vel, wishDir, targetSpeed, GROUND_ACCEL, dt);
+        if (sp > 0) { const drop = sp * GROUND_FRICTION * fricMult * dt; const scale = Math.max(0, sp - drop) / sp; this.vel.x *= scale; this.vel.z *= scale; }
+        accelerate(this.vel, wishDir, targetSpeed, slippery ? GROUND_ACCEL * SLIPPERY_ACCEL_MULT : GROUND_ACCEL, dt);
         this.vel.y -= GRAVITY * dt * 0.2;
+        // ski slopes: continuous downhill accel from the slope's own surface
+        // normal (component of gravity along the slope plane), capped so a
+        // long run doesn't accelerate forever.
+        if (this.onSki && this.skiNormal) {
+          const down = V3(0, -1, 0);
+          const slopeDir = down.clone().sub(this.skiNormal.clone().multiplyScalar(down.dot(this.skiNormal)));
+          if (slopeDir.lengthSq() > 1e-5) { slopeDir.normalize(); this.vel.addScaledVector(slopeDir, SKI_ACCEL * dt); }
+          const spXZ = Math.hypot(this.vel.x, this.vel.z);
+          if (spXZ > SKI_MAX_SPEED) { const s = SKI_MAX_SPEED / spXZ; this.vel.x *= s; this.vel.z *= s; }
+        }
       } else {
         accelerate(this.vel, wishDir, targetSpeed, AIR_ACCEL, dt);
         this.vel.y -= GRAVITY * dt;
@@ -1231,13 +1274,18 @@ class PlayerController {
     // so a fast fall can never tunnel through a thin floor.
     const fallDist = Math.max(0, prevY - this.pos.y);
     const dropDist = Math.min(10, fallDist + (wasGround ? 0.35 : 0.25));
-    const gy = groundHeightBelow(V3(this.pos.x, prevY, this.pos.z), dropDist);
+    const groundHit = groundProbe(V3(this.pos.x, prevY, this.pos.z), dropDist);
+    const gy = groundHit ? groundHit.point.y : null;
     if (gy != null && this.pos.y <= gy + 0.03 && this.vel.y <= 0.01) {
       this.pos.y = gy; this.vel.y = 0;
       if (!wasGround && this.airTime > 0.15) { Audio_.play('land'); this.kick = Math.max(this.kick, 0.15); }
       this.onGround = true; this.airTime = 0; this.usedDoubleJump = false;
+      this.onIce = World.iceMeshes.includes(groundHit.object);
+      this.onSki = World.skiMeshes.includes(groundHit.object);
+      this.skiNormal = (this.onSki && groundHit.face) ? groundHit.face.normal.clone().transformDirection(groundHit.object.matrixWorld) : null;
     } else {
       this.onGround = false; this.airTime += dt;
+      this.onIce = false; this.onSki = false; this.skiNormal = null;
     }
     if (this.onGround) this.lastSafePos.copy(this.pos);
     for (const hz of World.hazards) {
@@ -1342,9 +1390,19 @@ function zombieHealthForRound(round) { return Math.round(BASE_ZOMBIE_HEALTH * Ma
 function zombieSpeedForRound(round) { return lerp(ZOMBIE_WALK_SPEED, ZOMBIE_SPRINT_SPEED, clamp((round - 1) / 4, 0, 1)); }
 function zombiesPerRound(round, players) { const base = 6 + round * 3; return Math.min(60, Math.round(round <= 1 ? base : base * (1 + 0.5 * (players - 1)))); }
 
+// Reskin palettes for round-based grunts, keyed by kind. 'zombie' (chapter 1,
+// Anomaly Protocol) is the original rotted-green look; 'wretch' (chapter 2,
+// Eight Crazy Nights) is a frost/coal "glitch-corrupted holiday spirit" look —
+// same box-primitive rig and AI, just a different palette, so no new mesh
+// pipeline or AI code was needed to reskin the round-based mook army.
+const ZOMBIE_SKINS = {
+  zombie: { body: 0x516b3a, dark: 0x33461f, eye: 0xff2222 },
+  wretch: { body: 0x8fd8e8, dark: 0x2a3a55, eye: 0xff6a3b },
+};
 class Zombie {
-  constructor(id, pos, hp, speed) {
+  constructor(id, pos, hp, speed, kind) {
     this.id = id; this.pos = pos.clone(); this.vel = V3();
+    this.kind = kind || 'zombie';
     this.hp = hp; this.maxHp = hp; this.speed = speed;
     this.state = 'rising'; this.riseT = 0; this.deathT = -1; this.finished = false;
     this.attackCd = rand(0.2, 0.8); this.phase = rand(0, 10); this.stagger = 0;
@@ -1354,9 +1412,10 @@ class Zombie {
     scene.add(this.group);
   }
   buildMesh() {
-    const rot = new THREE.MeshStandardMaterial({ color: 0x516b3a, roughness: 0.95 });
-    const rotDark = new THREE.MeshStandardMaterial({ color: 0x33461f, roughness: 0.95 });
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff2222, emissiveIntensity: 1.8 });
+    const skin = ZOMBIE_SKINS[this.kind] || ZOMBIE_SKINS.zombie;
+    const rot = new THREE.MeshStandardMaterial({ color: skin.body, roughness: 0.95 });
+    const rotDark = new THREE.MeshStandardMaterial({ color: skin.dark, roughness: 0.95 });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x220000, emissive: skin.eye, emissiveIntensity: 1.8 });
     this.group = new THREE.Group();
     this.torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.62, 0.3), rot); this.torso.position.y = 1.12; this.torso.castShadow = true;
     this.head = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.32), rotDark); this.head.position.y = 1.58; this.head.castShadow = true;
@@ -1519,9 +1578,10 @@ Game.spawnZombie = function (opts = {}) {
   const id = 'z' + zombieIdSeq++;
   const hp = opts.hp || zombieHealthForRound(this.state.round);
   const speed = opts.speed || zombieSpeedForRound(this.state.round);
-  const z = new Zombie(id, pos, hp, speed);
+  const kind = opts.kind || this.state.enemyKind || 'zombie';
+  const z = new Zombie(id, pos, hp, speed, kind);
   this.zombies.set(id, z);
-  Net.emit('zSpawn', { id, pos: [pos.x, pos.y, pos.z], hp, speed });
+  Net.emit('zSpawn', { id, pos: [pos.x, pos.y, pos.z], hp, speed, kind });
   return z;
 };
 Game.activeZombieCount = function () { let n = 0; for (const z of this.zombies.values()) if (z.state !== 'dead') n++; return n; };
@@ -1599,12 +1659,14 @@ Game.miniWaveSpawnTick = function (dt) {
 Game.raycastZombies = function (origin, dir, maxDist) {
   const meshes = [];
   for (const z of this.zombies.values()) if (z.state === 'chase' || z.state === 'attack') meshes.push(...z.hitMeshes);
-  if (!meshes.length) return { zombie: null, point: null, head: false };
+  for (const b of this.bosses.values()) if (!b.dead && b.hitMeshes) meshes.push(...b.hitMeshes);
+  if (!meshes.length) return { zombie: null, boss: null, point: null, head: false };
   _ray.far = maxDist; _ray.set(origin, dir);
   const hits = _ray.intersectObjects(meshes, false);
-  if (!hits.length) return { zombie: null, point: null, head: false };
+  if (!hits.length) return { zombie: null, boss: null, point: null, head: false };
   const h = hits[0];
-  return { zombie: h.object.userData.zombie, point: h.point, head: !!h.object.userData.isHead };
+  const isBoss = !!h.object.userData.boss;
+  return { zombie: isBoss ? null : h.object.userData.zombie, boss: isBoss ? h.object.userData.boss : null, point: h.point, head: !!h.object.userData.isHead };
 };
 Game.reportHit = function (zombie, dmg, headshot, point) {
   showHitmarker(headshot); Audio_.play(headshot ? 'headshot' : 'hitmarker');
@@ -1638,7 +1700,26 @@ Game.creditKill = function (byId, headshot) {
 };
 Game.zombieAttack = function (zombie, targetPos) {
   Audio_.play('zombieAttack', zombie.pos);
-  if (Game.local && Game.local.pos.distanceTo(targetPos) < 0.6) Game.local.takeDamage(ZOMBIE_ATTACK_DAMAGE);
+  Game.damagePlayerAt(targetPos, ZOMBIE_ATTACK_DAMAGE, 0.6);
+};
+// Host-only: apply AI-sourced damage to whichever player actually owns
+// targetPos. The host can call takeDamage() directly only on its own local
+// player; every other player's health lives on their own machine (clients
+// are authoritative over their own HP, per the net header comment above), so
+// a remote target gets a direct point-to-point 'dmg' message instead — the
+// same raw send pattern already used for 'denyMsg'. Previously this only
+// ever checked Game.local, so a joined (non-host) player could never take
+// damage from any AI attack at all.
+Game.damagePlayerAt = function (targetPos, dmg, range) {
+  if (!Net.isHost) return;
+  if (Game.local && !Game.local.down && !Game.local.dead && Game.local.pos.distanceTo(targetPos) < range) { Game.local.takeDamage(dmg); return; }
+  let bestId = null, bd = range;
+  for (const [id, av] of Game.remoteAvatars) {
+    if (av.down) continue;
+    const d = av.pos.distanceTo(targetPos);
+    if (d < bd) { bd = d; bestId = id; }
+  }
+  if (bestId) { const c = Net.conns.get(bestId); if (c && c.open) c.send({ t: 'dmg', amount: dmg }); }
 };
 Game.addPoints = function (n) {
   if (!Net.isHost) return;
@@ -1669,6 +1750,7 @@ function addBox(parent, w, h, d, material, x, y, z, opts = {}) {
   mesh.position.set(x, y, z);
   if (opts.ry) mesh.rotation.y = opts.ry;
   if (opts.rz) mesh.rotation.z = opts.rz;
+  if (opts.rx) mesh.rotation.x = opts.rx;
   mesh.castShadow = opts.cast !== false; mesh.receiveShadow = opts.receive !== false;
   parent.add(mesh);
   if (opts.ceiling) {
@@ -1683,9 +1765,25 @@ function addBox(parent, w, h, d, material, x, y, z, opts = {}) {
     // taller, narrower cousins (walls, crates, barriers) block sideways.
     const looksLikeFloor = h <= 1.5 && (w >= 3 || d >= 3);
     const isWall = opts.wall != null ? opts.wall : !looksLikeFloor;
-    World.addCollider(mesh, { wallrun: !!opts.wallrun, vault: !!opts.vault, floor: opts.floor !== false, wall: isWall });
+    World.addCollider(mesh, { wallrun: !!opts.wallrun, vault: !!opts.vault, floor: opts.floor !== false, wall: isWall, ice: !!opts.ice, ski: !!opts.ski });
   }
   return mesh;
+}
+// ---- tilted floor slab for ski slopes: same collide/floor system as addBox
+// (the raycast-based floor probe naturally follows any orientation), just
+// rotated about X so its top face is a downhill grade running along Z from
+// (x, y0, z0) down to (x, y1, z1). Position is corrected for the box's own
+// half-thickness so the WALKABLE top surface — not the box's geometric
+// center — actually passes through the two given endpoints.
+function addSlope(parent, w, x, y0, z0, y1, z1, material, opts = {}) {
+  const dy = y1 - y0, dz = z1 - z0;
+  const len = Math.hypot(dy, dz);
+  const rx = Math.atan2(-dy, dz);
+  const h = 1.2;
+  const midY = (y0 + y1) / 2, midZ = (z0 + z1) / 2;
+  const cy = midY - (h / 2) * Math.cos(rx);
+  const cz = midZ - (h / 2) * Math.sin(rx);
+  return addBox(parent, w, h, len, material, x, cy, cz, Object.assign({ rx, collide: true, wall: false, ski: true, cast: true }, opts));
 }
 function makeOutline(mesh, hex, scale = 1.06) {
   const outline = new THREE.Mesh(mesh.geometry, new THREE.MeshBasicMaterial({ color: hex, side: THREE.BackSide, transparent: true, opacity: 0.55 }));
@@ -2225,7 +2323,13 @@ function buildMap3() {
     onEnter() {
       if (!Game.state.holdout.won || this.done) return;
       this.done = true;
-      Game.triggerVictory();
+      // The rift doesn't close behind you — it widens, and something (someone)
+      // tumbles through from the other side. Bridges chapter 1 (Anomaly
+      // Protocol) into chapter 2 (an Eight Crazy Nights-inspired campaign)
+      // instead of ending the game here; Hubie joins the crew as the first
+      // recruit of the new ally system on the way through.
+      Game.recruitAlly('hubie', portalGroup.position.clone().add(V3(0, 0, 1.5)));
+      Game.beginMapTransition(4600, 'THE RIFT WIDENS', 'A figure tumbles through with you — HUBIE DUBOIS has been pulled into the Anomaly...');
     },
   });
   Game.updateMapFx = (dt) => { mono.rotation.y += dt * 0.3; portalRing.rotation.z += dt * 0.9; portalDisc.rotation.z -= dt * 1.2; };
@@ -2235,9 +2339,737 @@ function buildMap3() {
 }
 
 // ============================================================================
+// BOSSES — one-off scripted encounters for chapter 2 (Eight Crazy Nights).
+// Same host-authoritative / client-render split as Zombie: aiTick only ever
+// runs on the host, both sides run render(), clients get position/state via
+// applyNet() snapshots. Anomaly Protocol had no boss subsystem at all before
+// this — it's new infrastructure, deliberately shaped like the existing
+// Zombie class so the rest of the engine (raycasting, net sync, HUD) barely
+// has to know the difference between the two.
+// ============================================================================
+let bossIdSeq = 1;
+const BOSS_DEFS = {
+  // ---- Frost Rink: a rampaging, glitch-possessed ice resurfacer ----
+  zamboni: {
+    name: 'THE ZAMBONI WRAITH', hp: 900,
+    buildMesh(b) {
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0xb03030, metalness: 0.6, roughness: 0.4, emissive: 0x3a0808, emissiveIntensity: 0.4 });
+      const iceMat = new THREE.MeshStandardMaterial({ color: 0x5be3ff, emissive: 0x5be3ff, emissiveIntensity: 1.2 });
+      b.group = new THREE.Group();
+      b.body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.6, 3.6), bodyMat); b.body.position.y = 1.0; b.body.castShadow = true;
+      b.cab = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.0, 1.4), bodyMat); b.cab.position.set(0, 1.9, 0.6); b.cab.castShadow = true;
+      b.brush = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.0, 10), iceMat); b.brush.rotation.z = Math.PI / 2; b.brush.position.set(0, 0.5, -2.0);
+      b.light = new THREE.PointLight(0x5be3ff, 2.2, 8, 2); b.light.position.set(0, 2.4, 0.6);
+      b.group.add(b.body, b.cab, b.brush, b.light);
+      const lbl = makeLabelSprite('THE ZAMBONI WRAITH', { color: '#5be3ff', size: 22 }); lbl.position.y = 3.1; b.group.add(lbl);
+      b.hitMeshes = [b.body, b.cab, b.brush];
+      for (const m of b.hitMeshes) m.userData.boss = b;
+      b.group.position.copy(b.pos);
+    },
+    aiTick(b, dt) {
+      const target = Game.nearestPlayerPos(b.pos);
+      if (!target) return;
+      const toT = target.clone().sub(b.pos); toT.y = 0;
+      if (b.state === 'intro') { if (b.t > 1.2) b.state = 'chase'; return; }
+      if (b.state === 'chase') {
+        toT.normalize();
+        b.vel.copy(toT).multiplyScalar(7.5);
+        b.targetFacing = Math.atan2(toT.x, toT.z);
+        if (b.st > 3.2) { b.st = 0; b.state = Math.random() < 0.5 ? 'ram' : 'freeze'; b.subT = 0; b.pulsed = false; }
+      } else if (b.state === 'ram') {
+        b.subT += dt;
+        if (b.subT < 0.5) b.vel.set(0, 0, 0);
+        else { b.vel.copy(toT.normalize()).multiplyScalar(16); Game.damagePlayerAt(b.pos, 22, 2.0); }
+        if (b.subT > 1.1) { b.state = 'chase'; b.st = 0; }
+      } else if (b.state === 'freeze') {
+        b.vel.set(0, 0, 0); b.subT += dt;
+        if (b.subT > 1.0 && !b.pulsed) { b.pulsed = true; Game.bossPulse(b, 6.5, 26); }
+        if (b.subT > 1.5) { b.state = 'chase'; b.st = 0; }
+      }
+      b.pos.x += b.vel.x * dt; b.pos.z += b.vel.z * dt;
+      const gy = groundHeightBelow(b.pos, 3); if (gy != null) b.pos.y = gy;
+    },
+    render(b, dt) { b.group.position.copy(b.pos); b.group.rotation.y = b.facing; b.brush.rotation.x += dt * 14; },
+  },
+  // ---- Frozen Slope: pursues the player down the mountain, then a parked
+  // showdown fight once the chase gauntlet ends (the "cop chase" scene) ----
+  copcar: {
+    name: 'SGT. GLITCH', hp: 1100,
+    buildMesh(b) {
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1a2a55, metalness: 0.5, roughness: 0.4 });
+      const lightMat = new THREE.MeshStandardMaterial({ color: 0xff3b3b, emissive: 0xff3b3b, emissiveIntensity: 1.6 });
+      const lightMat2 = new THREE.MeshStandardMaterial({ color: 0x5be3ff, emissive: 0x5be3ff, emissiveIntensity: 1.6 });
+      b.group = new THREE.Group();
+      b.body = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.1, 4.2), bodyMat); b.body.position.y = 0.9; b.body.castShadow = true;
+      b.cab = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.7, 1.9), bodyMat); b.cab.position.set(0, 1.5, 0.1); b.cab.castShadow = true;
+      b.lightL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.3), lightMat); b.lightL.position.set(-0.4, 1.9, 0.1);
+      b.lightR = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.3), lightMat2); b.lightR.position.set(0.4, 1.9, 0.1);
+      b.beacon = new THREE.PointLight(0xff3b3b, 2.4, 9, 2); b.beacon.position.set(0, 2.1, 0.1);
+      b.group.add(b.body, b.cab, b.lightL, b.lightR, b.beacon);
+      const lbl = makeLabelSprite('SGT. GLITCH', { color: '#ff3b3b', size: 22 }); lbl.position.y = 2.7; b.group.add(lbl);
+      b.hitMeshes = [b.body, b.cab];
+      for (const m of b.hitMeshes) m.userData.boss = b;
+      b.group.position.copy(b.pos);
+    },
+    aiTick(b, dt) {
+      // starts life in Boss's default 'intro' state; anything that isn't
+      // 'showdown' yet is the chase — no separate 'follow' state needed.
+      if (b.state !== 'showdown') {
+        const target = Game.nearestPlayerPos(b.pos);
+        if (!target) return;
+        const desired = target.clone().add(V3(0, 0, 9)); // trail behind, uphill (+Z), of the downhill skier
+        const toD = desired.clone().sub(b.pos); toD.y = 0;
+        b.vel.copy(toD).multiplyScalar(1.4).clampLength(0, 13);
+        b.targetFacing = Math.atan2(-toD.x, -toD.z);
+        b.st += dt;
+        if (b.st > 2.2) { b.st = 0; Game.bossPulse(b, 5.5, 14); }
+        b.pos.x += b.vel.x * dt; b.pos.z += b.vel.z * dt;
+        const gy = groundHeightBelow(b.pos, 4); if (gy != null) b.pos.y = gy;
+        if (Game.state.flags.reachedLodge) { b.state = 'showdown'; b.st = 0; b.arena = b.pos.clone(); b.state2 = null; }
+        return;
+      }
+      const target = Game.nearestPlayerPos(b.pos);
+      if (!target) return;
+      const toT = target.clone().sub(b.pos); toT.y = 0; const d = toT.length();
+      b.targetFacing = Math.atan2(toT.x, toT.z);
+      if (!b.state2 && b.st > 2.6) { b.st = 0; b.state2 = Math.random() < 0.5 ? 'shoot' : 'charge'; b.subT = 0; b.fired = false; }
+      if (b.state2 === 'shoot') {
+        b.subT += dt;
+        if (b.subT > 0.6 && !b.fired) { b.fired = true; if (d < 16) Game.damagePlayerAt(target, 16, 16); FX.tracer(b.pos.clone().add(V3(0, 1.6, 0)), target.clone(), 0xff3b3b); }
+        if (b.subT > 1.0) b.state2 = null;
+      } else if (b.state2 === 'charge') {
+        b.subT += dt;
+        if (b.subT < 0.4) b.vel.set(0, 0, 0);
+        else { b.vel.copy(toT.clone().normalize()).multiplyScalar(14); Game.damagePlayerAt(b.pos, 20, 2.2); }
+        if (b.subT > 1.0) b.state2 = null;
+      } else b.vel.set(0, 0, 0);
+      b.pos.x += b.vel.x * dt; b.pos.z += b.vel.z * dt;
+      const gy = groundHeightBelow(b.pos, 4); if (gy != null) b.pos.y = gy;
+    },
+    render(b, dt) { b.group.position.copy(b.pos); b.group.rotation.y = b.facing; b.beacon.intensity = 1.6 + Math.sin(b.t * 20) * 1.2; },
+  },
+  // ---- Rec Court: a hulking rival-league brute who crashes the game ----
+  grommet: {
+    name: 'COACH GROMMET', hp: 1300,
+    buildMesh(b) {
+      const skin = new THREE.MeshStandardMaterial({ color: 0xd88a3a, roughness: 0.8 });
+      const jersey = new THREE.MeshStandardMaterial({ color: 0xff3b3b, roughness: 0.7 });
+      b.group = new THREE.Group();
+      b.torso = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.0, 1.0), jersey); b.torso.position.y = 2.3; b.torso.castShadow = true;
+      b.head = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), skin); b.head.position.y = 3.7; b.head.castShadow = true;
+      b.armL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.6, 0.4), skin); b.armL.position.set(-1.05, 2.2, 0); b.armL.castShadow = true;
+      b.armR = b.armL.clone(); b.armR.position.x = 1.05;
+      b.legL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, 0.5), jersey); b.legL.position.set(-0.4, 0.8, 0); b.legL.castShadow = true;
+      b.legR = b.legL.clone(); b.legR.position.x = 0.4;
+      b.group.add(b.torso, b.head, b.armL, b.armR, b.legL, b.legR);
+      const lbl = makeLabelSprite('COACH GROMMET', { color: '#ff3b3b', size: 22 }); lbl.position.y = 4.5; b.group.add(lbl);
+      b.hitMeshes = [b.torso, b.head, b.armL, b.armR, b.legL, b.legR];
+      for (const m of b.hitMeshes) m.userData.boss = b;
+      b.head.userData.isHead = true;
+      b.group.position.copy(b.pos); b.group.scale.setScalar(1.15);
+    },
+    aiTick(b, dt) {
+      const target = Game.nearestPlayerPos(b.pos);
+      if (!target) return;
+      const toT = target.clone().sub(b.pos); toT.y = 0; const d = toT.length();
+      if (b.state === 'intro') { if (b.t > 1.0) b.state = 'chase'; return; }
+      if (b.state === 'chase') {
+        toT.normalize(); b.vel.copy(toT).multiplyScalar(5.6); b.targetFacing = Math.atan2(toT.x, toT.z);
+        if (d < 2.0) Game.damagePlayerAt(b.pos, 4, 2.2);
+        if (b.st > 3.0) { b.st = 0; b.state = 'dunk'; b.subT = 0; b.slammed = false; }
+      } else if (b.state === 'dunk') {
+        b.subT += dt; b.vel.set(0, 0, 0);
+        if (b.subT > 0.6 && !b.slammed) { b.slammed = true; Game.bossPulse(b, 6, 24); }
+        if (b.subT > 1.1) { b.state = 'chase'; b.st = 0; }
+      }
+      b.pos.x += b.vel.x * dt; b.pos.z += b.vel.z * dt;
+      const gy = groundHeightBelow(b.pos, 3); if (gy != null) b.pos.y = gy;
+    },
+    render(b, dt) {
+      b.group.position.copy(b.pos); b.group.rotation.y = b.facing;
+      const swing = b.state === 'chase' ? Math.sin(b.t * 8) * 0.4 : 0;
+      b.legL.rotation.x = swing; b.legR.rotation.x = -swing;
+    },
+  },
+  // ---- Town Hall: the finale — the Anomaly itself, wearing the town's own
+  // legend as a mask. Ranged bolts, adds, and an AOE slam across 2 phases. ----
+  harry: {
+    name: 'CORRUPTED HANUKKAH HARRY', hp: 2200,
+    buildMesh(b) {
+      const robe = new THREE.MeshStandardMaterial({ color: 0x2a4fb3, emissive: 0x0a1a4a, emissiveIntensity: 0.5, roughness: 0.6 });
+      const trim = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
+      const skin = new THREE.MeshStandardMaterial({ color: 0xd8a878, roughness: 0.8 });
+      const glow = new THREE.MeshStandardMaterial({ color: 0x5be3ff, emissive: 0x5be3ff, emissiveIntensity: 1.8 });
+      b.group = new THREE.Group();
+      b.torso = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.6, 1.2), robe); b.torso.position.y = 2.6; b.torso.castShadow = true;
+      b.trim = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.3, 1.3), trim); b.trim.position.y = 1.4;
+      b.head = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), skin); b.head.position.y = 4.2; b.head.castShadow = true;
+      b.beard = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.3), trim); b.beard.position.set(0, 3.9, 0.35);
+      b.armL = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.9, 0.45), robe); b.armL.position.set(-1.2, 2.5, 0); b.armL.castShadow = true;
+      b.armR = b.armL.clone(); b.armR.position.x = 1.2;
+      b.staffGlow = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), glow); b.staffGlow.position.set(1.2, 3.6, 0);
+      b.light = new THREE.PointLight(0x5be3ff, 2.6, 10, 2); b.light.position.set(0, 3.5, 0);
+      b.group.add(b.torso, b.trim, b.head, b.beard, b.armL, b.armR, b.staffGlow, b.light);
+      const lbl = makeLabelSprite('CORRUPTED HANUKKAH HARRY', { color: '#5be3ff', size: 20 }); lbl.position.y = 5.0; b.group.add(lbl);
+      b.hitMeshes = [b.torso, b.head, b.armL, b.armR];
+      for (const m of b.hitMeshes) m.userData.boss = b;
+      b.head.userData.isHead = true;
+      b.group.position.copy(b.pos); b.group.scale.setScalar(1.3);
+    },
+    aiTick(b, dt) {
+      const target = Game.nearestPlayerPos(b.pos);
+      if (!target) return;
+      const toT = target.clone().sub(b.pos); toT.y = 0; const d = toT.length();
+      b.targetFacing = Math.atan2(toT.x, toT.z);
+      const phase2 = b.hp < b.maxHp * 0.5;
+      if (b.state === 'intro') { if (b.t > 1.6) b.state = 'cast'; return; }
+      if (!b.subState && b.st > (phase2 ? 1.6 : 2.3)) {
+        b.st = 0;
+        const roll = Math.random();
+        b.subState = roll < 0.45 ? 'bolt' : roll < 0.75 ? 'summon' : 'slam';
+        b.subT = 0; b.fired = false; b.summoned = false; b.slammed = false;
+      }
+      if (b.subState === 'bolt') {
+        b.subT += dt;
+        if (b.subT > 0.5 && !b.fired) { b.fired = true; if (d < 22) Game.damagePlayerAt(target, 18, 22); FX.tracer(b.pos.clone().add(V3(0, 3.4, 0)), target.clone(), 0x5be3ff); Audio_.play('smg', b.pos); }
+        if (b.subT > 0.8) b.subState = null;
+      } else if (b.subState === 'summon') {
+        b.subT += dt;
+        if (b.subT > 0.5 && !b.summoned) { b.summoned = true; for (let i = 0; i < (phase2 ? 3 : 2); i++) Game.spawnZombie({ hp: zombieHealthForRound(Game.state.round + 2), speed: zombieSpeedForRound(Game.state.round + 2), kind: 'wretch' }); }
+        if (b.subT > 0.8) b.subState = null;
+      } else if (b.subState === 'slam') {
+        b.subT += dt;
+        if (b.subT > 0.7 && !b.slammed) { b.slammed = true; Game.bossPulse(b, 7, 26); }
+        if (b.subT > 1.0) b.subState = null;
+      }
+      if (d > 10) { toT.normalize(); b.vel.copy(toT).multiplyScalar(3.2); } else b.vel.set(0, 0, 0);
+      b.pos.x += b.vel.x * dt; b.pos.z += b.vel.z * dt;
+      const gy = groundHeightBelow(b.pos, 3); if (gy != null) b.pos.y = gy;
+    },
+    render(b, dt) { b.group.position.copy(b.pos); b.group.rotation.y = b.facing; b.staffGlow.rotation.y += dt * 3; b.light.intensity = 2.2 + Math.sin(b.t * 4) * 0.6; },
+  },
+};
+
+class Boss {
+  constructor(id, kind, pos, opts = {}) {
+    this.id = id; this.kind = kind; this.pos = pos.clone(); this.vel = V3();
+    this.def = BOSS_DEFS[kind];
+    this.hp = opts.hp != null ? opts.hp : this.def.hp; this.maxHp = this.hp;
+    this.state = 'intro'; this.t = 0; this.st = 0; this.stagger = 0;
+    this.facing = opts.facing || 0; this.targetFacing = this.facing;
+    this.dead = false; this.deathT = -1; this.finished = false;
+    this.netTarget = null;
+    this.def.buildMesh(this);
+    scene.add(this.group);
+  }
+  applyDamage(dmg) {
+    if (this.dead) return { died: false };
+    this.hp -= dmg; this.stagger = 0.1;
+    if (this.hp <= 0) { this.dead = true; this.deathT = 0; this.vel.set(0, 0, 0); return { died: true }; }
+    return { died: false };
+  }
+  applyNet(d) {
+    if (d.pos) this.netTarget = { pos: V3(d.pos[0], d.pos[1], d.pos[2]), ry: d.ry || 0 };
+    if (d.hp != null) this.hp = d.hp;
+    if (d.state && d.state !== this.state) {
+      if (d.state === 'dead' && this.state !== 'dead') this.deathT = 0;
+      this.state = d.state === 'dead' ? this.state : d.state;
+      if (d.state === 'dead') this.dead = true;
+    }
+  }
+  aiTick(dt) {
+    if (this.dead) { this.deathT += dt; if (this.deathT > 3) this.finished = true; return; }
+    this.t += dt; this.st += dt; this.stagger = Math.max(0, this.stagger - dt);
+    this.def.aiTick(this, dt);
+  }
+  render(dt) {
+    if (!Net.isHost) {
+      if (this.state === 'intro') this.t += dt;
+      if (this.netTarget) {
+        this.pos.lerp(this.netTarget.pos, Math.min(1, dt * 10));
+        let dyaw = this.netTarget.ry - this.facing; while (dyaw > Math.PI) dyaw -= Math.PI * 2; while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+        this.targetFacing = this.facing + dyaw;
+      }
+    }
+    let df = this.targetFacing - this.facing; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2;
+    this.facing += df * Math.min(1, dt * 8);
+    this.def.render(this, dt);
+  }
+  dispose() { scene.remove(this.group); }
+}
+
+Game.spawnBoss = function (kind, pos, opts = {}) {
+  if (!Net.isHost) return null;
+  const id = 'b' + bossIdSeq++;
+  const b = new Boss(id, kind, pos, opts);
+  this.bosses.set(id, b);
+  Net.emit('bSpawn', { id, kind, pos: [pos.x, pos.y, pos.z], hp: b.hp, facing: b.facing });
+  return b;
+};
+// AOE hit against every player within radius, used by boss slam/pulse attacks
+// (as opposed to damagePlayerAt, which targets the single nearest player).
+Game.bossPulse = function (b, radius, dmg) {
+  if (!Net.isHost) return;
+  FX.burst(b.pos.clone().add(V3(0, 0.3, 0)), 20, 'spark');
+  Audio_.play('boom', b.pos);
+  if (Game.local && !Game.local.down && !Game.local.dead) { const d = Game.local.pos.distanceTo(b.pos); if (d < radius) Game.local.takeDamage(dmg); }
+  for (const [id, av] of Game.remoteAvatars) {
+    if (av.down) continue;
+    const d = av.pos.distanceTo(b.pos);
+    if (d < radius) { const c = Net.conns.get(id); if (c && c.open) c.send({ t: 'dmg', amount: dmg }); }
+  }
+};
+Game.reportBossHit = function (boss, dmg, headshot, point) {
+  showHitmarker(headshot); Audio_.play(headshot ? 'headshot' : 'hitmarker');
+  FX.burst(point, headshot ? 16 : 8, 'blood');
+  if (Game.local) Game.local.stats.hits++;
+  if (Net.isHost) Game.resolveBossHit(boss.id, dmg, headshot, Net.myId);
+  else Net.sendToHost('bossHit', { bid: boss.id, dmg, headshot });
+};
+Game.resolveBossHit = function (bid, dmg, headshot, byId) {
+  if (!Net.isHost) return;
+  const b = this.bosses.get(bid);
+  if (!b) return;
+  const { died } = b.applyDamage(dmg);
+  Net.emit('bHit', { id: bid, hp: Math.max(0, b.hp) });
+  if (!died) { Game.addPoints(POINTS_HIT); Audio_.play('zombieHit', b.pos); return; }
+  Game.addPoints(500);
+  Net.emit('bDeath', { id: bid, killerId: byId });
+  Audio_.play('boom', b.pos);
+  Game.creditKill(byId, headshot);
+  Game.onBossDefeated && Game.onBossDefeated(b);
+};
+Game.bossSyncTick = function (dt) {
+  if (!Net.isHost || Net.conns.size === 0) return;
+  this._bSyncAccum = (this._bSyncAccum || 0) + dt;
+  if (this._bSyncAccum < 1 / 16) return;
+  this._bSyncAccum = 0;
+  const list = [];
+  for (const b of this.bosses.values()) {
+    if (b.dead) continue;
+    list.push([b.id, Math.round(b.pos.x * 100) / 100, Math.round(b.pos.y * 100) / 100, Math.round(b.pos.z * 100) / 100, Math.round(b.facing * 100) / 100, Math.round(b.hp), b.state]);
+  }
+  if (list.length) Net.emit('bSync', { list });
+};
+
+// ============================================================================
+// ALLIES — recruitable AI companions (chapter 2's "ally system"). Invulnerable
+// support units: they follow the nearest active player and auto-attack the
+// nearest hostile zombie/boss in range. Kept deliberately simple (no down/
+// revive state) since the co-op down/revive system is already a fair amount
+// of surface area for actual players; roster membership persists across map
+// loads via Game.state.allyRoster, entities themselves are map-scoped like
+// zombies/bosses and get respawned near the player on every Game.loadMap.
+// ============================================================================
+let allyIdSeq = 1;
+const ALLY_DEFS = {
+  hubie: { name: 'HUBIE', dmg: 16, range: 9, atkCd: 0.9, speed: 4.6, color: 0x3fbcbc },
+  whitey: { name: 'WHITEY', dmg: 20, range: 8, atkCd: 1.1, speed: 4.3, color: 0xffcf3b },
+};
+class Ally {
+  constructor(id, kind, pos) {
+    this.id = id; this.kind = kind; this.def = ALLY_DEFS[kind];
+    this.pos = pos.clone(); this.vel = V3(); this.facing = 0; this.targetFacing = 0;
+    this.atkCd = 0; this.phase = rand(0, 10); this.netTarget = null;
+    this.buildMesh();
+    scene.add(this.group);
+  }
+  buildMesh() {
+    const skin = new THREE.MeshStandardMaterial({ color: this.def.color, roughness: 0.6 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x22242c, roughness: 0.7 });
+    this.group = new THREE.Group();
+    this.torso = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.58, 0.26), skin); this.torso.position.y = 1.12; this.torso.castShadow = true;
+    this.head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), skin); this.head.position.y = 1.56; this.head.castShadow = true;
+    this.armL = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.48, 0.13), dark); this.armL.position.set(-0.3, 1.14, 0); this.armL.castShadow = true;
+    this.armR = this.armL.clone(); this.armR.position.x = 0.3;
+    this.legL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.54, 0.15), dark); this.legL.position.set(-0.12, 0.54, 0); this.legL.castShadow = true;
+    this.legR = this.legL.clone(); this.legR.position.x = 0.12;
+    this.group.add(this.torso, this.head, this.armL, this.armR, this.legL, this.legR);
+    this.nameSprite = makeLabelSprite(this.def.name, { color: '#' + this.def.color.toString(16).padStart(6, '0'), size: 24 });
+    this.nameSprite.position.y = 2.0; this.nameSprite.scale.multiplyScalar(0.6);
+    this.group.add(this.nameSprite);
+    this.group.position.copy(this.pos);
+  }
+  applyNet(d) { if (d.pos) this.netTarget = { pos: V3(d.pos[0], d.pos[1], d.pos[2]), ry: d.ry || 0 }; }
+  aiTick(dt) {
+    this.atkCd -= dt;
+    const followP = Game.nearestPlayerPos(this.pos);
+    if (followP) {
+      const toP = followP.clone().sub(this.pos); toP.y = 0;
+      const d = toP.length();
+      if (d > 2.6) { toP.normalize(); this.vel.copy(toP).multiplyScalar(this.def.speed); this.targetFacing = Math.atan2(toP.x, toP.z); }
+      else this.vel.set(0, 0, 0);
+    } else this.vel.set(0, 0, 0);
+    let target = null, bd = this.def.range;
+    for (const z of Game.zombies.values()) { if (z.state === 'dead' || z.state === 'rising') continue; const d = this.pos.distanceTo(z.pos); if (d < bd) { bd = d; target = z; } }
+    for (const b of Game.bosses.values()) { if (b.dead) continue; const d = this.pos.distanceTo(b.pos); if (d < bd) { bd = d; target = b; } }
+    if (target) {
+      this.targetFacing = Math.atan2(target.pos.x - this.pos.x, target.pos.z - this.pos.z);
+      if (this.atkCd <= 0) {
+        this.atkCd = this.def.atkCd;
+        if (target instanceof Zombie) Game.resolveHit(target.id, this.def.dmg, false, 'ally:' + this.id);
+        else Game.resolveBossHit(target.id, this.def.dmg, false, 'ally:' + this.id);
+        FX.tracer(this.pos.clone().add(V3(0, 1.3, 0)), target.pos.clone().add(V3(0, 1, 0)), this.def.color);
+      }
+    }
+    this.pos.x += this.vel.x * dt; this.pos.z += this.vel.z * dt;
+    const gy = groundHeightBelow(this.pos, 3); if (gy != null) this.pos.y = gy;
+  }
+  render(dt) {
+    if (!Net.isHost && this.netTarget) this.pos.lerp(this.netTarget.pos, Math.min(1, dt * 10));
+    let df = this.targetFacing - this.facing; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2;
+    this.facing += df * Math.min(1, dt * 8);
+    this.phase += dt * (Math.hypot(this.vel.x, this.vel.z) > 0.3 ? 6 : 0);
+    const swing = Math.sin(this.phase) * 0.5;
+    this.legL.rotation.x = swing; this.legR.rotation.x = -swing;
+    this.group.position.copy(this.pos); this.group.rotation.y = this.facing;
+  }
+  dispose() { scene.remove(this.group); }
+}
+// Host-only: recruit `kind` into the persistent roster (if not already) and
+// spawn a live Ally right now at `pos`. Also used silently (via loadMap) to
+// respawn already-recruited allies near the player on every new map.
+Game.recruitAlly = function (kind, pos, announce) {
+  if (!Net.isHost) return null;
+  const already = this.state.allyRoster.includes(kind);
+  if (!already) this.state.allyRoster.push(kind);
+  const id = 'a' + allyIdSeq++;
+  const a = new Ally(id, kind, pos);
+  this.allies.set(id, a);
+  Net.emit('allySpawn', { id, kind, pos: [pos.x, pos.y, pos.z], announce: announce !== false && !already });
+  return a;
+};
+Game.allySyncTick = function (dt) {
+  if (!Net.isHost || Net.conns.size === 0) return;
+  this._aSyncAccum = (this._aSyncAccum || 0) + dt;
+  if (this._aSyncAccum < 1 / 12) return;
+  this._aSyncAccum = 0;
+  const list = [];
+  for (const a of this.allies.values()) list.push([a.id, Math.round(a.pos.x * 100) / 100, Math.round(a.pos.y * 100) / 100, Math.round(a.pos.z * 100) / 100, Math.round(a.facing * 100) / 100]);
+  if (list.length) Net.emit('aSync', { list });
+};
+
+// ============================================================================
+// MAP 4 — "FROST RINK" (chapter 2 opener: Eight Crazy Nights-inspired)
+// The rift dumped everyone at Dukesberry's rec-center pond, now a glitch-lit
+// ice rink. Objective: survive on the ice (low-friction skating floor — WASD
+// momentum carries, so ease off to turn), then override the Rink Systems to
+// draw out THE ZAMBONI WRAITH.
+// ============================================================================
+function buildMap4() {
+  clearMapRoot();
+  scene.fog = new THREE.FogExp2(0x0c1830, 0.017);
+  scene.background = new THREE.Color(0x0a1220);
+  setSun(V3(10, 34, 6), V3(0, 0, -16), 42, 0xcfe8ff, 0.6);
+  ambient.intensity = 0.4; hemi.intensity = 0.58; hemi.color.set(0x9fd0ff); hemi.groundColor.set(0x0a1622);
+
+  const iceMat = mat(tileTex(TEX.floorGrate(), 4, 6), { color: 0xbfe8ff, roughness: 0.12, metalness: 0.15, emissive: 0x143244, emissiveIntensity: 0.18 });
+  const boardMat = mat(tileTex(TEX.concrete(), 2, 1), { color: 0x6a4a2a, roughness: 0.85 });
+  const snowMat = mat(tileTex(TEX.concrete(), 2, 2), { color: 0xdcecff, roughness: 0.9 });
+  const wallMat = mat(tileTex(TEX.brick(), 3, 3), { color: 0x3a3040, roughness: 0.85 });
+
+  // snowy entry plaza (normal friction) leading onto the rink
+  addBox(mapRoot, 18, 1, 9, snowMat, 0, -0.5, 8.5, { collide: true, floor: true, cast: false });
+  // main rink floor — the whole arena is ice-tagged, so every fight here is a skate
+  addBox(mapRoot, 26, 1, 42, iceMat, 0, -0.5, -13, { collide: true, floor: true, ice: true, cast: false });
+  for (let i = 0; i < 5; i++) crystalLight(rand(-11, 11), 0.2, rand(-30, 4), 0x8fd3ff);
+  function crystalLight(x, y, z, color) { const l = new THREE.PointLight(color, 0.6, 8, 2); l.position.set(x, 2.2, z); mapRoot.add(l); }
+
+  // rink boards double as vault-able cover around the perimeter
+  function board(x, z, w, d) { addBox(mapRoot, w, 1.5, d, boardMat, x, 0.75, z, { vault: true, cast: true }); }
+  board(-13.2, -13, 0.7, 42); board(13.2, -13, 0.7, 42);
+  board(0, -34.2, 26, 0.7);
+  addBox(mapRoot, 26.6, 3, 0.4, wallMat, 0, 2, -34.4, { collide: true, cast: true });
+  addBox(mapRoot, 0.5, 12, 44, wallMat, -14, 6, -13, { wallrun: true, cast: true });
+  addBox(mapRoot, 0.5, 12, 44, wallMat, 14, 6, -13, { wallrun: true, cast: true });
+  addBox(mapRoot, 27, 0.4, 44, mat(tileTex(TEX.concrete(), 3, 3), { color: 0x241a30 }), 0, 12.3, -13, { collide: false, cast: false, ceiling: true });
+
+  World.spawnPoints.push(V3(-9, 0, 0), V3(9, 0, 0), V3(-9, 0, -18), V3(9, 0, -18), V3(0, 0, -28), V3(-9, 0, -28), V3(9, 0, -28));
+
+  addWallBuy(mapRoot, 'wb_smg4', V3(-13, 0.9, 3), V3(1, 0, 0), 'smg');
+  addWallBuy(mapRoot, 'wb_shotgun4', V3(13, 0.9, 3), V3(-1, 0, 0), 'shotgun');
+  addPerkMachine(mapRoot, 'perk_jugger4', V3(-10, 0, -30), 'jugger', PERK_PRICE, 0xff3b3b, 'JUGGR-FIZZ');
+  addPerkMachine(mapRoot, 'perk_quick4', V3(10, 0, -30), 'quickcola', PERK_PRICE, 0x3bff8f, 'QUICK-COLA');
+
+  // Rink Systems override — starts the boss encounter
+  const boxGroup = new THREE.Group(); boxGroup.position.set(0, 0, -13); mapRoot.add(boxGroup);
+  const boxMat = new THREE.MeshStandardMaterial({ color: 0x1a2436, metalness: 0.6, roughness: 0.35 });
+  const glowMat = new THREE.MeshStandardMaterial({ color: 0x5be3ff, emissive: 0x5be3ff, emissiveIntensity: 1.1 });
+  addTo(boxGroup, new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.6, 0.8), boxMat), 0, 0.8, 0, true);
+  const switchCore = addTo(boxGroup, new THREE.Mesh(new THREE.OctahedronGeometry(0.3, 0), glowMat), 0, 1.9, 0, true);
+  const boxLight = new THREE.PointLight(0x5be3ff, 1.6, 6, 2); boxLight.position.set(0, 1.9, 0); boxGroup.add(boxLight);
+  const boxLbl = makeLabelSprite('RINK SYSTEMS', { color: '#5be3ff', size: 22 }); boxLbl.position.set(0, 2.5, 0); boxLbl.scale.multiplyScalar(0.85); boxGroup.add(boxLbl);
+
+  World.interactables.push({
+    id: 'rinkSwitch', pos: V3(0, 0, -13), radius: 2.8, kind: 'boss',
+    promptText: () => Game.state.flags.bossSpawned ? '' : 'Override the Rink Systems',
+    hostApply() {
+      if (Game.state.flags.bossSpawned) return { ok: false, msg: 'Already active' };
+      Game.state.flags.bossSpawned = true;
+      Game.spawnBoss('zamboni', V3(0, 0, -30));
+      Net.emit('bigmsg', { t: 'THE ZAMBONI WRAITH AWAKENS', s: 'Skate for your life.' });
+      Game.setObjective('Defeat the Zamboni Wraith!');
+      switchCore.material.color.set(0xff3b3b); boxLight.color.set(0xff3b3b);
+      return { ok: true };
+    },
+  });
+  Game.onBossDefeated = function (b) {
+    if (b.kind !== 'zamboni') return;
+    Game.setObjective('The ice stills. Find the way out.');
+    Game.beginMapTransition(3400, 'RINK CLEARED', 'The Zamboni Wraith melts into slush and glitch-static.');
+  };
+  Game.setObjective('Survive on the ice, then override the Rink Systems to challenge whatever is haunting it.');
+  return { playerStart: V3(0, 0, 10), spawnYaw: Math.PI };
+}
+
+// ============================================================================
+// MAP 5 — "FROZEN SLOPE" (chapter 2: skiing + the cop chase)
+// Objective: ski the long downhill grade (a ski-tagged slope — low friction +
+// continuous downhill accel, capped so it stays controllable) while SGT.
+// GLITCH, a corrupted cruiser, chases from behind (periodic ram pulses if it
+// catches up). Reaching the lodge at the bottom turns the chase into a
+// parked showdown fight.
+// ============================================================================
+function buildMap5() {
+  clearMapRoot();
+  scene.fog = new THREE.FogExp2(0x0a1420, 0.013);
+  scene.background = new THREE.Color(0x0a1018);
+  setSun(V3(-14, 46, 10), V3(0, 10, -50), 60, 0xdfe8ff, 0.78);
+  ambient.intensity = 0.42; hemi.intensity = 0.62; hemi.color.set(0xbcd8ff); hemi.groundColor.set(0x0a0f18);
+
+  const snowMat = mat(tileTex(TEX.concrete(), 3, 10), { color: 0xe8f2ff, roughness: 0.85 });
+  const rockMat = mat(tileTex(TEX.voidRock(), 2, 2), { color: 0x5a5a62, roughness: 0.9 });
+  const lodgeMat = mat(tileTex(TEX.brick(), 3, 2), { color: 0x6a4a2a, roughness: 0.8 });
+
+  // starting plateau (flat, normal friction) at the top of the run
+  addBox(mapRoot, 18, 1, 8, snowMat, 0, 15.5, 4, { collide: true, floor: true, cast: false });
+  World.spawnPoints.push(V3(-5, 16, 4), V3(5, 16, 4));
+  addWallBuy(mapRoot, 'wb_smg5', V3(-8.6, 16.9, 4), V3(1, 0, 0), 'smg');
+  addWallBuy(mapRoot, 'wb_shotgun5', V3(8.6, 16.9, 4), V3(-1, 0, 0), 'shotgun');
+
+  // the long ski slope
+  const Y0 = 16, Z0 = 0, Y1 = 2, Z1 = -98;
+  addSlope(mapRoot, 26, 0, Y0, Z0, Y1, Z1, snowMat);
+  const slopeY = (z) => Y0 + (Y1 - Y0) * (z - Z0) / (Z1 - Z0);
+
+  // scattered rocks down the run — light vault-able obstacles, not hard walls,
+  // so the slope stays an open bowl players can weave across freely
+  const rocks = [[-6, -14], [7, -24], [-8, -38], [5, -50], [-4, -64], [7, -76], [-6, -88]];
+  for (const [x, z] of rocks) addBox(mapRoot, 1.6, 1.6, 1.6, rockMat, x, slopeY(z) + 0.8, z, { vault: true, cast: true });
+  const depths = [-10, -24, -38, -52, -66, -80, -92];
+  for (const z of depths) World.spawnPoints.push(V3(-7, slopeY(z), z), V3(7, slopeY(z), z));
+
+  Game.state.flags.reachedLodge = false;
+  World.triggerZones.push({
+    id: 'chaseStart', box: new THREE.Box3(V3(-13, Y0 - 3, -6), V3(13, Y0 + 3, 3)), done: false, wasInside: false,
+    onEnter() {
+      if (this.done) return;
+      this.done = true;
+      Game.spawnBoss('copcar', V3(0, Y0, -3));
+      Net.emit('bigmsg', { t: 'SGT. GLITCH IS ON YOUR TAIL', s: "Ski for the lodge — don't look back." });
+      Game.setObjective('Ski down to the lodge — stay ahead of the cruiser!');
+    },
+  });
+  World.triggerZones.push({
+    id: 'lodgeArrive', box: new THREE.Box3(V3(-15, Y1 - 3, -104), V3(15, Y1 + 5, -96)), done: false, wasInside: false,
+    onEnter() {
+      if (this.done || Game.state.flags.reachedLodge) return;
+      this.done = true;
+      Game.setFlag('reachedLodge', true);
+      Net.emit('bigmsg', { t: 'THE CRUISER CUTS YOU OFF', s: 'Fight it here.' });
+      Game.setObjective('Defeat Sgt. Glitch!');
+    },
+  });
+
+  // the lodge — flat arena at the bottom of the run
+  addBox(mapRoot, 30, 1, 24, lodgeMat, 0, Y1 - 0.5, -112, { collide: true, floor: true, cast: false });
+  addBox(mapRoot, 0.6, 8, 24, rockMat, -15, Y1 + 4, -112, { wallrun: true, cast: true });
+  addBox(mapRoot, 0.6, 8, 24, rockMat, 15, Y1 + 4, -112, { wallrun: true, cast: true });
+  addPerkMachine(mapRoot, 'perk_jugger5', V3(-11, Y1, -120), 'jugger', PERK_PRICE, 0xff3b3b, 'JUGGR-FIZZ');
+  addPapMachine(mapRoot, 'pap2', V3(11, Y1, -120));
+  World.spawnPoints.push(V3(-10, Y1, -108), V3(10, Y1, -108), V3(0, Y1, -118));
+
+  Game.onBossDefeated = function (b) {
+    if (b.kind !== 'copcar') return;
+    Game.setObjective('The cruiser sparks out. Head into the rec center.');
+    Game.beginMapTransition(3400, 'THE CHASE ENDS', 'Sgt. Glitch short-circuits in a shower of siren-light.');
+  };
+
+  Game.setObjective('Ski down the mountain to the lodge.');
+  return { playerStart: V3(0, 16, 6), spawnYaw: Math.PI };
+}
+
+// ============================================================================
+// MAP 6 — "REC COURT" (chapter 2: basketball + the ally system's 2nd recruit)
+// Dukesberry's rec-center gym. Objective: find WHITEY at the free-throw line
+// and sink one with him (recruits him as a permanent ally), then push through
+// to the rival league's entrance, where COACH GROMMET crashes the game.
+// ============================================================================
+function buildMap6() {
+  clearMapRoot();
+  scene.fog = new THREE.FogExp2(0x140f1c, 0.02);
+  scene.background = new THREE.Color(0x0c0a14);
+  setSun(V3(6, 24, 10), V3(0, 0, -18), 34, 0xfff2d0, 0.68);
+  ambient.intensity = 0.46; hemi.intensity = 0.55; hemi.color.set(0xffe8b0); hemi.groundColor.set(0x1a1420);
+
+  const courtMat = mat(tileTex(TEX.concrete(), 4, 6), { color: 0xb8823a, roughness: 0.6 });
+  const wallMat = mat(tileTex(TEX.brick(), 3, 2), { color: 0x5a4038, roughness: 0.85 });
+  const ceilMat = mat(tileTex(TEX.concrete(), 4, 4), { color: 0x2a2430, roughness: 0.95 });
+  const boardMat = new THREE.MeshStandardMaterial({ color: 0xf4ecd8, roughness: 0.5 });
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0xff6a3b, emissive: 0x7a2a10, emissiveIntensity: 0.5 });
+
+  function room(z0, z1, halfW, y = 3.1) {
+    const len = z1 - z0, cz = (z0 + z1) / 2;
+    addBox(mapRoot, halfW * 2, 0.4, len, courtMat, 0, -0.2, cz, { collide: true, floor: true, cast: false });
+    addBox(mapRoot, 0.4, y * 2, len, wallMat, -halfW, y, cz, { wallrun: true, cast: true });
+    addBox(mapRoot, 0.4, y * 2, len, wallMat, halfW, y, cz, { wallrun: true, cast: true });
+    addBox(mapRoot, halfW * 2 + 0.8, 0.3, len, ceilMat, 0, y * 2 + 0.3, cz, { collide: false, cast: false, ceiling: true });
+  }
+  function hoop(x, z, facing) {
+    const grp = new THREE.Group(); grp.position.set(x, 0, z); grp.rotation.y = facing; mapRoot.add(grp);
+    addTo(grp, new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.0, 6), boardMat), 0, 1.5, 0, true);
+    addTo(grp, new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 0.06), boardMat), 0, 3.0, 0.35, true);
+    const rim = addTo(grp, new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.03, 6, 14), rimMat), 0, 2.65, 0.5, true);
+    rim.rotation.x = Math.PI / 2;
+    return grp;
+  }
+
+  // Main court
+  room(-2, -30, 12);
+  World.spawnPoints.push(V3(-6, 0, -4), V3(6, 0, -4), V3(-6, 0, -14), V3(6, 0, -14));
+  addWallBuy(mapRoot, 'wb_smg6', V3(-11.4, 0.9, -4), V3(1, 0, 0), 'smg');
+  addWallBuy(mapRoot, 'wb_shotgun6', V3(11.4, 0.9, -4), V3(-1, 0, 0), 'shotgun');
+  addPerkMachine(mapRoot, 'perk_quick6', V3(-9, 0, -26), 'quickcola', PERK_PRICE, 0x3bff8f, 'QUICK-COLA');
+  hoop(0, -3, Math.PI);
+  hoop(0, -27, 0);
+
+  // Free-throw line: recruit Whitey
+  const ftGroup = new THREE.Group(); ftGroup.position.set(0, 0, -8); mapRoot.add(ftGroup);
+  const lineMat = new THREE.MeshStandardMaterial({ color: 0xf4ecd8, emissive: 0xf4ecd8, emissiveIntensity: 0.4 });
+  addTo(ftGroup, new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.03, 0.2), lineMat), 0, 0.02, 0, false);
+  const whistleLbl = makeLabelSprite('WHITEY WARMING UP', { color: '#ffcf3b', size: 20 }); whistleLbl.position.set(0, 2.2, -8); whistleLbl.scale.multiplyScalar(0.75); mapRoot.add(whistleLbl);
+  World.interactables.push({
+    id: 'freeThrow', pos: V3(0, 0, -8), radius: 2.6, kind: 'ally',
+    promptText: () => Game.state.allyRoster.includes('whitey') ? '' : 'Sink a free-throw with Whitey',
+    hostApply() {
+      if (Game.state.allyRoster.includes('whitey')) return { ok: false, msg: 'Already recruited' };
+      Game.addPoints(200);
+      Game.recruitAlly('whitey', V3(1.5, 0, -8));
+      whistleLbl.visible = false;
+      Net.emit('bigmsg', { t: 'NOTHING BUT NET!', s: 'Whitey Duvall joins your crew.' });
+      return { ok: true };
+    },
+  });
+
+  // Path to the rival league's entrance
+  room(-30, -46, 8, 2.6);
+  World.spawnPoints.push(V3(-4, 0, -36), V3(4, 0, -36));
+
+  Game.state.flags.grommetSpawned = false;
+  World.triggerZones.push({
+    id: 'grommetGate', box: new THREE.Box3(V3(-8, -1, -45), V3(8, 6, -38)), done: false, wasInside: false,
+    onEnter() {
+      if (this.done) return;
+      this.done = true;
+      Game.spawnBoss('grommet', V3(0, 0, -46));
+      Net.emit('bigmsg', { t: 'COACH GROMMET CRASHES THE GAME', s: "He doesn't like being shown up on his own court." });
+      Game.setObjective('Defeat Coach Grommet!');
+    },
+  });
+
+  const arenaMat = mat(tileTex(TEX.concrete(), 3, 3), { color: 0x241a26 });
+  addBox(mapRoot, 20, 0.4, 16, arenaMat, 0, -0.2, -56, { collide: true, floor: true, cast: false });
+  addBox(mapRoot, 0.5, 8, 16, wallMat, -10, 4, -56, { wallrun: true, cast: true });
+  addBox(mapRoot, 0.5, 8, 16, wallMat, 10, 4, -56, { wallrun: true, cast: true });
+  World.spawnPoints.push(V3(-7, 0, -52), V3(7, 0, -52), V3(0, 0, -62));
+
+  Game.onBossDefeated = function (b) {
+    if (b.kind !== 'grommet') return;
+    Game.setObjective('The court falls quiet. Head for Town Hall.');
+    Game.beginMapTransition(3400, 'GAME OVER, COACH', 'Grommet crumples into a heap of glitch-static confetti.');
+  };
+
+  Game.setObjective('Find Whitey at the free-throw line, then push toward the rival league entrance.');
+  return { playerStart: V3(0, 0, -1), spawnYaw: Math.PI };
+}
+
+// ============================================================================
+// MAP 7 — "TOWN HALL" (chapter 2 finale)
+// Dukesberry's town hall, mid-pageant, glitch-lit and abandoned. Objective:
+// cross the hall to the stage and take down CORRUPTED HANUKKAH HARRY — the
+// Anomaly itself, wearing the town's own legend as a mask. Defeating it ends
+// the full 7-map campaign.
+// ============================================================================
+function buildMap7() {
+  clearMapRoot();
+  scene.fog = new THREE.FogExp2(0x120a1c, 0.022);
+  scene.background = new THREE.Color(0x0a0714);
+  setSun(V3(-8, 26, 6), V3(0, 0, -24), 38, 0xd8c8ff, 0.6);
+  ambient.intensity = 0.4; hemi.intensity = 0.55; hemi.color.set(0x8fa0ff); hemi.groundColor.set(0x160a1e);
+
+  const floorMat = mat(tileTex(TEX.concrete(), 3, 6), { color: 0x8a7248, roughness: 0.7 });
+  const wallMat = mat(tileTex(TEX.brick(), 3, 3), { color: 0x3a2c40, roughness: 0.85 });
+  const ceilMat = mat(tileTex(TEX.concrete(), 4, 4), { color: 0x201a28, roughness: 0.95 });
+  const bannerMat = new THREE.MeshStandardMaterial({ color: 0x2a4fb3, emissive: 0x0a1a4a, emissiveIntensity: 0.35 });
+
+  function hall(z0, z1, halfW, y = 3.4) {
+    const len = z1 - z0, cz = (z0 + z1) / 2;
+    addBox(mapRoot, halfW * 2, 0.4, len, floorMat, 0, -0.2, cz, { collide: true, floor: true, cast: false });
+    addBox(mapRoot, 0.5, y * 2, len, wallMat, -halfW, y, cz, { wallrun: true, cast: true });
+    addBox(mapRoot, 0.5, y * 2, len, wallMat, halfW, y, cz, { wallrun: true, cast: true });
+    addBox(mapRoot, halfW * 2 + 0.9, 0.3, len, ceilMat, 0, y * 2 + 0.3, cz, { collide: false, cast: false, ceiling: true });
+  }
+
+  // Entrance foyer
+  hall(-2, -20, 11);
+  World.spawnPoints.push(V3(-6, 0, -6), V3(6, 0, -6), V3(-6, 0, -14), V3(6, 0, -14));
+  addWallBuy(mapRoot, 'wb_smg7', V3(-10.4, 0.9, -4), V3(1, 0, 0), 'smg');
+  addWallBuy(mapRoot, 'wb_shotgun7', V3(10.4, 0.9, -4), V3(-1, 0, 0), 'shotgun');
+  addPerkMachine(mapRoot, 'perk_jugger7', V3(-8, 0, -17), 'jugger', PERK_PRICE, 0xff3b3b, 'JUGGR-FIZZ');
+  addPerkMachine(mapRoot, 'perk_quick7', V3(8, 0, -17), 'quickcola', PERK_PRICE, 0x3bff8f, 'QUICK-COLA');
+  for (let i = 0; i < 4; i++) addTo(mapRoot, new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.4, 0.06), bannerMat), -9.5 + i * 6.3, 3.2, -19.7, true);
+
+  // Barricaded doors into the pageant hall
+  const doorBox = new THREE.Box3(V3(-3.2, 0, -20.6), V3(3.2, 3.6, -19.4));
+  addDoor(mapRoot, 'townDoor', doorBox, DOOR_PRICES[1]);
+
+  // Pageant hall — the boss arena, with a raised stage at the far end
+  hall(-21, -56, 15, 4.2);
+  World.spawnPoints.push(V3(-9, 0, -28), V3(9, 0, -28), V3(-9, 0, -40), V3(9, 0, -40));
+  addPapMachine(mapRoot, 'pap3', V3(0, 0, -30));
+
+  const stageMat = mat(tileTex(TEX.concrete(), 3, 2), { color: 0x6a4a2a, roughness: 0.75 });
+  addBox(mapRoot, 22, 1.4, 10, stageMat, 0, 0.7, -50, { vault: true, cast: true, floor: true });
+  for (let i = 0; i < 6; i++) { const l = new THREE.PointLight(0x5be3ff, 1.4, 8, 2); l.position.set(-12 + i * 4.8, 5.5, -49); mapRoot.add(l); }
+  const bigLbl = makeLabelSprite('DUKESBERRY WINTER PAGEANT', { color: '#5be3ff', size: 22 }); bigLbl.position.set(0, 6.4, -55.8); mapRoot.add(bigLbl);
+
+  Game.state.flags.harrySpawned = false;
+  World.triggerZones.push({
+    id: 'harryGate', box: new THREE.Box3(V3(-13, -1, -46), V3(13, 6, -38)), done: false, wasInside: false,
+    onEnter() {
+      if (this.done) return;
+      this.done = true;
+      Game.spawnBoss('harry', V3(0, 1.4, -50));
+      Net.emit('bigmsg', { t: 'THE ANOMALY REVEALS ITSELF', s: 'Wearing the town\'s own legend as a mask.' });
+      Game.setObjective('Defeat Corrupted Hanukkah Harry — end the Anomaly for good.');
+    },
+  });
+
+  Game.onBossDefeated = function (b) {
+    if (b.kind !== 'harry') return;
+    Game.setObjective('The rift collapses. It\'s over.');
+    Game.triggerVictory();
+  };
+
+  Game.setObjective('Clear the doors and reach the pageant stage.');
+  return { playerStart: V3(0, 0, 4), spawnYaw: Math.PI };
+}
+
+// ============================================================================
 // GAME — state machine, message dispatch, map loading, main loop
 // ============================================================================
-const MAPS = [buildMap1, buildMap2, buildMap3];
+const MAPS = [buildMap1, buildMap2, buildMap3, buildMap4, buildMap5, buildMap6, buildMap7];
+const CHAPTER2_START_MAP = 3; // index of buildMap4 — where the Eight Crazy Nights chapter begins
 Game.startedAt = 0;
 Game._ended = false;
 
@@ -2324,8 +3156,11 @@ Game.loadMap = function (idx, spawnAtStart) {
   Game.state.mapIndex = idx;
   Game.state.flags = {};
   Game.zombies.forEach((z) => z.dispose()); Game.zombies.clear();
+  Game.bosses.forEach((b) => b.dispose()); Game.bosses.clear();
+  Game.allies.forEach((a) => a.dispose()); Game.allies.clear();
+  Game.state.enemyKind = idx >= CHAPTER2_START_MAP ? 'wretch' : 'zombie';
   World.reset();
-  Game.updateMapFx = null;
+  Game.updateMapFx = null; Game.onBossDefeated = null;
   FX.clear();
   const info = MAPS[idx]();
   if (Game.local && spawnAtStart !== false) {
@@ -2334,17 +3169,20 @@ Game.loadMap = function (idx, spawnAtStart) {
     camera.position.copy(info.playerStart);
     camera.rotation.set(0, info.spawnYaw || 0, 0);
   }
+  // recruited allies are chapter-persistent but each Ally entity is map-scoped
+  // like a zombie/boss — respawn one per roster member near the fresh start.
+  if (Net.isHost) for (const kind of Game.state.allyRoster) Game.recruitAlly(kind, info.playerStart.clone().add(V3(rand(-2, 2), 0, rand(-2, 2))), false);
   Game._ended = false;
   Game.state.round = 1; Game.state.roundActive = false; Game.state.spawnQueue = 0; Game.state.miniWave = null;
   if (Net.isHost) setTimeout(() => { if (Net.isHost) Game.startRound(1); }, 2500);
 };
-Game.beginMapTransition = function (delay) {
+Game.beginMapTransition = function (delay, title, sub) {
   if (!Net.isHost) return;
   const to = Game.state.mapIndex + 1; // always derived from the live map index — never a hardcoded literal
-  Net.emit('mapTransition', { to, delay });
+  Net.emit('mapTransition', { to, delay, title, sub });
 };
-Game.playMapTransition = function (to, delay) {
-  showBigMsg('SECTOR CLEAR', 'Advancing to the next site…');
+Game.playMapTransition = function (to, delay, title, sub) {
+  showBigMsg(title || 'SECTOR CLEAR', sub || 'Advancing to the next site…', Math.max(3200, delay - 200));
   Audio_.play('portal');
   fadeOverlay(true);
   setTimeout(() => { Game.loadMap(to); fadeOverlay(false); hideBigMsg(); }, delay);
@@ -2397,7 +3235,7 @@ Game.handleMsg = function (type, data, fromId) {
     case 'objective': setObjectiveUI(data.text); break;
     case 'bigmsg': showBigMsg(data.t, data.s); break;
     case 'roundStart': Game.state.round = data.round; showRoundOverlay(data.round); Audio_.play('roundStart', data.round); break;
-    case 'zSpawn': if (!Net.isHost && !Game.zombies.has(data.id)) { const z = new Zombie(data.id, V3(data.pos[0], data.pos[1], data.pos[2]), data.hp, data.speed); Game.zombies.set(data.id, z); } break;
+    case 'zSpawn': if (!Net.isHost && !Game.zombies.has(data.id)) { const z = new Zombie(data.id, V3(data.pos[0], data.pos[1], data.pos[2]), data.hp, data.speed, data.kind); Game.zombies.set(data.id, z); } break;
     case 'zHit': { const z = Game.zombies.get(data.id); if (z) { z.hp = data.hp; z.stagger = 0.12; } break; }
     case 'zDeath': { const z = Game.zombies.get(data.id); if (z && z.state !== 'dead') { z.state = 'dead'; z.deathT = 0; } break; }
     case 'zSync': {
@@ -2412,7 +3250,28 @@ Game.handleMsg = function (type, data, fromId) {
     case 'holdoutStart': Object.assign(Game.state.holdout, { active: true, t: 0, won: false, duration: data.duration }); Game.onHoldoutStartFx && Game.onHoldoutStartFx(); Audio_.play('roundStart', 1); break;
     case 'holdoutTick': Game.state.holdout.t = data.t; Game.state.holdout.charge = data.charge; Game.onHoldoutTickFx && Game.onHoldoutTickFx(); break;
     case 'holdoutComplete': Game.state.holdout.active = false; Game.state.holdout.won = true; Game.onHoldoutCompleteFx && Game.onHoldoutCompleteFx(); break;
-    case 'mapTransition': Game.playMapTransition(data.to, data.delay); break;
+    case 'mapTransition': Game.playMapTransition(data.to, data.delay, data.title, data.sub); break;
+    case 'bSpawn': if (!Net.isHost && !Game.bosses.has(data.id)) { const b = new Boss(data.id, data.kind, V3(data.pos[0], data.pos[1], data.pos[2]), { hp: data.hp, facing: data.facing }); Game.bosses.set(data.id, b); } break;
+    case 'bHit': { const b = Game.bosses.get(data.id); if (b) { b.hp = data.hp; b.stagger = 0.1; } break; }
+    case 'bDeath': { const b = Game.bosses.get(data.id); if (b && !b.dead) { b.dead = true; b.deathT = 0; } break; }
+    case 'bSync': {
+      if (Net.isHost) break;
+      for (const [id, x, y, z, ry, hp, state] of data.list) { const b = Game.bosses.get(id); if (b) b.applyNet({ pos: [x, y, z], ry, hp, state }); }
+      break;
+    }
+    case 'bossHit': if (Net.isHost) Game.resolveBossHit(data.bid, data.dmg, data.headshot, fromId); break;
+    case 'allySpawn': {
+      if (!Game.state.allyRoster.includes(data.kind)) Game.state.allyRoster.push(data.kind);
+      if (!Net.isHost && !Game.allies.has(data.id)) Game.allies.set(data.id, new Ally(data.id, data.kind, V3(data.pos[0], data.pos[1], data.pos[2])));
+      if (data.announce) { showBigMsg(ALLY_DEFS[data.kind].name + ' JOINED THE CREW', 'A new ally fights at your side.'); Audio_.play('perk'); }
+      break;
+    }
+    case 'aSync': {
+      if (Net.isHost) break;
+      for (const [id, x, y, z, ry] of data.list) { const a = Game.allies.get(id); if (a) a.applyNet({ pos: [x, y, z], ry }); }
+      break;
+    }
+    case 'dmg': if (Game.local) Game.local.takeDamage(data.amount); break;
     case 'playerDown': {
       if (Net.isHost && fromId !== Net.myId) Net.relay('playerDown', data, fromId);
       if (data.id !== Net.myId) { const av = Game.remoteAvatars.get(data.id); if (av) av.down = true; }
@@ -2438,7 +3297,9 @@ Net.onPeerLeft = (id) => {
 Game.beginSession = function () {
   Game.local = new PlayerController(Net.myId, Net.myName, Net.myColor);
   Game.remoteAvatars.forEach((a) => a.dispose()); Game.remoteAvatars.clear();
-  Game.state.points = 0; Game.state.pointsEarned = 0; Game.startedAt = performance.now(); Game._ended = false;
+  Game.state.points = 0; Game.state.pointsEarned = 0; Game.state.allyRoster = []; Game.startedAt = performance.now(); Game._ended = false;
+  Game.bosses.forEach((b) => b.dispose()); Game.bosses.clear();
+  Game.allies.forEach((a) => a.dispose()); Game.allies.clear();
   document.getElementById('hud').style.display = 'block';
   document.getElementById('overlay').classList.add('hidden');
   Game.loadMap(0);
@@ -2484,16 +3345,26 @@ function animate(now) {
   }
   for (const av of Game.remoteAvatars.values()) av.update(dt);
   Game.zombies.forEach((z) => { if (Net.isHost) z.aiTick(dt); z.render(dt); });
+  Game.bosses.forEach((b) => { if (Net.isHost) b.aiTick(dt); b.render(dt); });
+  Game.allies.forEach((a) => { if (Net.isHost) a.aiTick(dt); a.render(dt); });
   if (Net.isHost) {
     Game.spawnDirectorTick(dt);
     Game.zombieSyncTick(dt);
+    Game.bossSyncTick(dt);
+    Game.allySyncTick(dt);
     const toRemove = [];
     Game.zombies.forEach((z) => { if (z.finished) toRemove.push(z.id); });
     toRemove.forEach((id) => { Game.zombies.get(id).dispose(); Game.zombies.delete(id); });
+    const bToRemove = [];
+    Game.bosses.forEach((b) => { if (b.finished) bToRemove.push(b.id); });
+    bToRemove.forEach((id) => { Game.bosses.get(id).dispose(); Game.bosses.delete(id); });
   } else {
     const toRemove = [];
     Game.zombies.forEach((z) => { if (z.state === 'dead' && z.deathT > 2.2) toRemove.push(z.id); });
     toRemove.forEach((id) => { Game.zombies.get(id).dispose(); Game.zombies.delete(id); });
+    const bToRemove = [];
+    Game.bosses.forEach((b) => { if (b.dead && b.deathT > 3) bToRemove.push(b.id); });
+    bToRemove.forEach((id) => { Game.bosses.get(id).dispose(); Game.bosses.delete(id); });
   }
   Game.updateMapFx && Game.updateMapFx(dt);
   updateFlickerLights(now / 1000);
@@ -2617,6 +3488,22 @@ function updateHUD() {
     $('hudHoldoutTime').textContent = ho.won ? 'CHARGE COMPLETE' : fmtClock(ho.duration - ho.t);
     $('hudCharge').style.width = ho.charge + '%';
   } else hoEl.classList.remove('show');
+  let activeBoss = null;
+  for (const b of Game.bosses.values()) if (!b.dead) { activeBoss = b; break; }
+  const bossEl = $('hudBoss');
+  if (activeBoss) {
+    bossEl.classList.add('show');
+    $('hudBossName').textContent = activeBoss.def.name;
+    $('hudBossFill').style.width = clamp((activeBoss.hp / activeBoss.maxHp) * 100, 0, 100) + '%';
+  } else bossEl.classList.remove('show');
+  const alliesEl = $('hudAllies'); alliesEl.innerHTML = '';
+  const seen = new Set();
+  for (const a of Game.allies.values()) {
+    if (seen.has(a.kind)) continue; seen.add(a.kind);
+    const d = document.createElement('div'); d.className = 'allyicon';
+    d.innerHTML = `<span class="dot" style="background:#${a.def.color.toString(16).padStart(6, '0')}"></span>${a.def.name}`;
+    alliesEl.appendChild(d);
+  }
 }
 
 // ---- pause / click-to-play ----
