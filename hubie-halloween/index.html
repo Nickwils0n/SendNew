@@ -444,6 +444,7 @@ const Sound = (() => {
     type: () => tone({ type: 'square', f0: 1200 + Math.random() * 200, dur: 0.02, vol: 0.03 }),
     gasp: () => { tone({ type: 'sawtooth', f0: 300, f1: 700, dur: 0.25, vol: 0.12, vib: 40 }); },
     siren: () => { tone({ type: 'square', f0: 700, f1: 1000, dur: 0.3, vol: 0.08 }); tone({ type: 'square', f0: 1000, f1: 700, dur: 0.3, vol: 0.08, delay: 0.3 }); },
+    enrage: () => { tone({ type: 'sawtooth', f0: 140, f1: 90, dur: 0.4, vol: 0.18, vib: 35, vibRate: 14 }); tone({ type: 'square', f0: 100, f1: 260, dur: 0.35, vol: 0.14, delay: 0.05 }); noise({ dur: 0.3, vol: 0.14, filter: 'bandpass', freq: 500, f1: 1600 }); },
   };
   function play(name) {
     if (!ac || muted) return;
@@ -674,6 +675,7 @@ const SMALL = {
   puck1: ['..k..', '.kkk.', 'kkkkk'],
   basketball: ['.oOo.', 'OkOkO', 'kOOOk', 'OkOkO', '.oOo.'],
   puckshot: ['.kk.', 'kkkk', '.kk.'],
+  snowball: ['.WW.', 'WWiW', 'WWWW', '.WW.'],
 };
 const SM = {};
 for (const k in SMALL) SM[k] = spr(SMALL[k]);
@@ -1427,8 +1429,8 @@ const LEVELS = [
     ],
   },
   {
-    title: 'THROUGH THE RIFT', place: 'DUKESBERRY TOWN POND', theme: 'rink', music: 'main', pal: 'whitey', boss: 'duke', icy: true,
-    plan: ['open', 'elves', 'pucks', 'cars', 'ramp', 'runners', 'crates', 'pucks', 'check', 'pal',
+    title: 'THROUGH THE RIFT', place: 'DUKESBERRY TOWN POND', theme: 'rink', music: 'main', boss: 'duke', icy: true,
+    plan: ['open', 'elves', 'pucks', 'cars', 'ramp', 'runners', 'crates', 'pucks', 'check',
       'elves', 'ramp', 'trash', 'pucks', 'sandwich', 'bigair', 'cars', 'elves', 'barriers', 'arena'],
     intro: [
       ["narrator", "SALEM'S TOWN SQUARE. THE CROWD IS STILL CHEERING WHEN THE SKY ITSELF SPLITS OPEN."],
@@ -1436,26 +1438,24 @@ const LEVELS = [
       ['violet', 'HUBIE, GET AWAY FROM IT!'],
       ['narrator', 'TOO LATE. A CRACKLING, ICE-BLUE RIFT YANKS HUBIE OFF HIS BIKE AND SWALLOWS HIM WHOLE.'],
       ['hubie', 'MOOOOOM—'],
-      ['narrator', 'HE LANDS WITH A THUD ON A FROZEN POND, IN A TOWN HE HAS NEVER SEEN. A SIGN CREAKS IN THE WIND: WELCOME TO DUKESBERRY.'],
-      ['whitey', "WHOA! DID YOU FALL OUT OF THE SKY? THAT'S USUALLY MY THING."],
-      ['hubie', "I'M HUBIE. HUBIE DUBOIS. IS IT STILL HALLOWEEN HERE?"],
-      ['whitey', "IT'S HANUKKAH SEASON, PAL. I'M WHITEY DUVALL, HEAD REFEREE OF THE DUKESBERRY REC CENTER. AND THAT GUY SKATING AT US? NOT FRIENDLY."],
-    ],
-    palIntro: [
-      ['whitey', "NEED A HAND? I KNOW THIS ICE BETTER THAN ANYONE. WELL, ME AND BENJAMIN. BENJAMIN'S A KID, NOT A REINDEER, BEFORE YOU ASK."],
-      ['hubie', "I WASN'T GOING TO ASK THAT."],
-      ['whitey', 'EVERYONE ASKS THAT.'],
+      ['narrator', 'HE HITS THE ICE HARD. NO BIKE. NO THERMOS. AND WHEN HE LOOKS DOWN AT HIS OWN HANDS, THEY ARE NOT HIS HANDS.'],
+      ['davey', '...OKAY. NOT A DELI APRON. NOT MY BIKE. AND I DO NOT REMEMBER GROWING A GOATEE.'],
+      ['narrator', 'HE CATCHES HIS REFLECTION IN THE ICE. SOMEONE ELSE IS WEARING HIS FACE. HE IS SOMEONE ELSE.'],
+      ['davey', 'WHOEVER I AM NOW, I STILL HAVE TO FIND MY WAY HOME. GREAT.'],
+      ['whitey', "DAVEY? DAVEY STONE? THOUGHT YOU SKIPPED TOWN AGAIN."],
+      ['davey', "I— YEAH. DAVEY. THAT'S ME. TOTALLY DIDN'T JUST FALL OUT OF A HOLE IN THE SKY."],
+      ['whitey', "SURE. I'M WHITEY DUVALL, IN CASE FALLING OUT OF THE SKY RATTLED THAT LOOSE TOO. AND THAT GUY SKATING AT US? STILL NOT FRIENDLY."],
     ],
     bossIntro: [
-      ['duke', "WELL LOOK WHO FELL OUT OF THE SKY. NEW KID WANTS TO SKATE ON MY POND?"],
-      ['whitey', "IT'S NOT YOUR POND, DUKE. IT'S THE TOWN'S POND."],
-      ['duke', 'SAME THING. TRICK-OR-TREATER GETS THE BOARDS.'],
+      ['duke', "STONE. SHOULD'VE KNOWN. NEW GUY FALLS OUT OF THE SKY AND IT'S STILL YOU."],
+      ['whitey', "LEAVE HIM ALONE, DUKE."],
+      ['duke', 'TRESPASSER GETS THE BOARDS. SAME RULE AS ALWAYS.'],
     ],
     outro: [
-      ['duke', "FINE! FINE! I'M GOING! THIS ISN'T OVER, WHITEY!"],
-      ['whitey', "IT'S BEEN OVER SINCE 1987, DUKE."],
-      ['hubie', 'OKAY. GREAT. NEW TOWN, NEW BULLY, SAME THERMOS. HOW DO I GET HOME?'],
-      ['whitey', "NO IDEA. BUT MY BUDDY DAVEY MIGHT — HE ONCE GOT ARRESTED NEAR SOMETHING GLOWY ON THE MOUNTAIN. LET'S GO ASK HIM."],
+      ['duke', "FINE! FINE! I'M GOING! THIS ISN'T OVER, STONE!"],
+      ['whitey', "IT'S BEEN OVER SINCE YOU TWO WERE TEN."],
+      ['davey', 'WAIT, WE HAVE HISTORY? GREAT. LOVE THAT FOR ME.'],
+      ['whitey', "YOUR BUDDY GRABINSKI'S GOT THE MOUNTAIN ROAD LOCKED DOWN. IT'S THE ONLY WAY TO TOWN FROM HERE."],
       ['narrator', 'A SNOWMOBILE ROARS TO LIFE SOMEWHERE ON THE HILL ABOVE TOWN. THIS DOES NOT SOUND LIKE GOOD NEWS.'],
     ],
   },
@@ -1466,47 +1466,43 @@ const LEVELS = [
     intro: [
       ['narrator', 'THE ROAD UP MOUNT DUKESBERRY IS ALL ICE, HAIRPIN TURNS, AND ONE VERY SUSPICIOUS SECURITY GUARD.'],
       ['whitey', "THAT'S OFFICER GRABINSKI. TECHNICALLY HE'S MALL SECURITY, NOT AN ACTUAL COP. DON'T TELL HIM THAT."],
-      ['hubie', 'WHY WOULD I TELL HIM THAT?!'],
-      ['whitey', 'PEOPLE DO. IT NEVER GOES WELL.'],
+      ['davey', 'WHY WOULD I TELL HIM THAT?!'],
+      ['whitey', 'YOU TOLD HIM THAT LAST YEAR. TWICE.'],
     ],
     bossIntro: [
-      ['grabinski', 'FREEZE! I SAW YOU LOOK AT THAT NO-SKIING SIGN FUNNY!'],
-      ['hubie', "I DIDN'T EVEN SEE A SIGN!"],
-      ['grabinski', 'EXACTLY MY POINT.'],
+      ['grabinski', "STONE! I KNEW YOU'D BE BACK ON THIS HILL!"],
+      ['davey', "I DIDN'T EVEN SEE A SIGN!"],
+      ['grabinski', "THERE'S NEVER A SIGN WITH YOU."],
     ],
     outro: [
-      ['grabinski', 'OKAY! OKAY! MY SNOWMOBILE IS SMOKING! I YIELD TO THE... WHATEVER YOU ARE!'],
-      ['hubie', "I'M HUBIE! THE HALLOWEEN HELPER!"],
-      ['grabinski', "THAT'S NOT A REAL JOB TITLE."],
-      ['narrator', 'AT THE BOTTOM OF THE HILL, THE DUKESBERRY REC CENTER GYM GLOWS WITH COURT LIGHTS. A SCOREBOARD BUZZES.'],
-      ['whitey', "THAT'S WHERE DAVEY COACHES. IF ANYONE KNOWS HOW TO GET YOU HOME, IT'S THE GUY WHO'S BEEN TRYING TO LEAVE THIS TOWN FOR YEARS."],
+      ['grabinski', 'OKAY! OKAY! MY SNOWMOBILE IS SMOKING! I YIELD!'],
+      ['davey', 'FINALLY, SOME RESPECT.'],
+      ['grabinski', "THAT'S NOT RESPECT, STONE, THAT'S A CIRCULATION PROBLEM."],
+      ['narrator', 'AT THE BOTTOM OF THE HILL, THE REC CENTER GYM GLOWS WITH COURT LIGHTS. A SCOREBOARD BUZZES.'],
+      ['whitey', "AND YOU'RE STILL THE ASSISTANT COACH, SO. PRACTICE STARTS IN TEN MINUTES."],
     ],
   },
   {
-    title: 'SLAM DUNK SHOWDOWN', place: 'DUKESBERRY REC CENTER', theme: 'court', music: 'main', pal: 'davey', boss: 'stinger',
-    plan: ['open', 'crates', 'elves', 'pucks', 'ramp', 'barriers', 'check', 'pal',
+    title: 'SLAM DUNK SHOWDOWN', place: 'DUKESBERRY REC CENTER', theme: 'court', music: 'main', boss: 'stinger',
+    plan: ['open', 'crates', 'elves', 'pucks', 'ramp', 'barriers', 'check',
       'elves', 'crates', 'bigair', 'runners', 'sandwich', 'elves', 'pucks', 'barriers', 'arena'],
     intro: [
-      ['narrator', 'INSIDE THE GYM, A PEEWEE BASKETBALL GAME HAS GONE COMPLETELY OFF THE RAILS.'],
-      ['davey', 'WHO INVITED THE GUY WITH THE THERMOS?'],
-      ['whitey', 'DAVEY, THIS IS HUBIE. HE FELL OUT OF THE SKY. HE NEEDS TO GET HOME.'],
-      ['davey', "OH GREAT, ANOTHER GUY WITH PROBLEMS. FINE. HELP ME DEAL WITH COACH STINGER'S GOONS AND WE'LL TALK."],
-    ],
-    palIntro: [
-      ['davey', "ALRIGHT, ROOKIE, STAY BEHIND ME. I'VE BEEN THROWN OUT OF THIS GYM FOUR TIMES. I KNOW HOW IT WORKS."],
-      ['hubie', "THAT DOESN'T SOUND LIKE A GOOD THING."],
-      ['davey', "IT'S A GREAT THING. IT MEANS I KNOW ALL THE EXITS."],
+      ['narrator', 'THE DUKESBERRY REC CENTER GYM. APPARENTLY "DAVEY" IS THE ASSISTANT COACH HERE. NEWS TO HIM.'],
+      ['whitey', "THERE YOU ARE. YOUR KIDS WERE ASKING WHERE COACH DAVEY WENT."],
+      ['davey', 'MY KIDS. RIGHT. OF COURSE I HAVE KIDS. COACHING KIDS. THAT I COACH.'],
+      ['whitey', "...YOU HIT YOUR HEAD ON THAT ICE, DIDN'T YOU."],
+      ['davey', "COACH STINGER'S TEAM IS CHEATING AGAIN, ISN'T HE."],
+      ['whitey', 'EVERY SINGLE GAME.'],
     ],
     bossIntro: [
-      ['stinger', 'STONE! YOU BRING A CLOWN TO MY GYM? THIS IS A REC LEAGUE, NOT A CIRCUS!'],
-      ['davey', "IT'S ALWAYS BEEN A LITTLE BIT OF A CIRCUS, MARTY."],
+      ['stinger', 'STONE! LATE TO YOUR OWN PRACTICE. TYPICAL.'],
+      ['davey', "I WAS BUSY FALLING THROUGH A HOLE IN REALITY, MARTY. WHAT'S YOUR EXCUSE?"],
     ],
     outro: [
       ['stinger', 'FINE! TAKE THE COURT! TAKE THE WHOLE STUPID REC CENTER!'],
       ['davey', 'FINALLY, SOMETHING GOOD OUT OF ONE OF THESE GAMES.'],
-      ['whitey', "DAVEY. THE PORTAL. TOWN HALL. TONIGHT'S THE PAGEANT — IF ANYTHING GLOWY IS GOING TO SHOW BACK UP, IT'S THERE."],
+      ['whitey', "DAVEY. TOWN HALL. TONIGHT'S THE PAGEANT — IF ANYTHING GLOWY IS COMING BACK, IT'S THERE."],
       ['davey', 'OF COURSE IT IS. EVERYTHING WEIRD IN THIS TOWN HAPPENS AT THE HANUKKAH PAGEANT.'],
-      ['hubie', 'ONE MORE STOP. I CAN DO ONE MORE STOP.'],
     ],
   },
   {
@@ -1515,9 +1511,9 @@ const LEVELS = [
       'elves', 'pucks', 'bigair', 'sandwich', 'crates', 'elves', 'pail', 'arena'],
     intro: [
       ['narrator', 'TOWN HALL. THE ENTIRE TOWN HAS PACKED IN FOR THE HANUKKAH PAGEANT. SOMEWHERE UP THERE, A RIFT IS SUPPOSEDLY WAITING.'],
-      ['whitey', 'IF WE\'RE RIGHT, IT SHOWS UP DURING MY SKATING NUMBER. NO PRESSURE.'],
+      ['whitey', "IF WE'RE RIGHT, IT SHOWS UP DURING MY SKATING NUMBER. NO PRESSURE."],
       ['davey', "THERE'S ALWAYS PRESSURE AT THIS THING. THAT'S WHY I USUALLY DRINK THROUGH IT."],
-      ['hubie', 'PLEASE DO NOT DRINK THROUGH IT.'],
+      ['whitey', 'PLEASE DO NOT DRINK THROUGH IT.'],
       ['davey', "FINE. I'LL DRINK AFTER."],
     ],
     bossIntro: [
@@ -1528,12 +1524,14 @@ const LEVELS = [
     ],
     outro: [
       ['narrator', 'DUKE SKIDS OUT THE DOOR ON HIS BACK. ABOVE THE STAGE, THE SKY CRACKS OPEN — THE SAME ICE-BLUE RIFT.'],
-      ['whitey', "THAT'S OUR CUE! GO GET HOME, HUBIE!"],
-      ['hubie', 'WAIT. I NEVER GOT TO SEE YOUR SKATING NUMBER.'],
+      ['whitey', "THAT'S YOUR RIDE. GO ON."],
+      ['davey', 'WAIT. I NEVER SAW YOUR SKATING NUMBER.'],
       ['whitey', 'WATCH.'],
       ['narrator', 'WHITEY GLIDES ONTO THE ICE CENTER STAGE AND LANDS A PERFECT SPIN. THE TOWN GOES WILD.'],
-      ['davey', 'OKAY. THAT PART WAS ACTUALLY GREAT.'],
-      ['narrator', 'HUBIE WAVES GOODBYE AS THE RIFT PULLS HIM BACK THROUGH, SPINNING PAST STARS, PUMPKINS, AND ONE VERY CONFUSED MENORAH.'],
+      ['whitey', "NOW GO, BEFORE IT CLOSES! AND— HEY. THANKS FOR ACTUALLY SHOWING UP THIS YEAR."],
+      ['narrator', 'THE RIFT PULLS HIM BACK THROUGH, SPINNING PAST STARS, SNOWBALLS, AND ONE VERY CONFUSED MENORAH.'],
+      ['narrator', 'WHEN HE HITS THE GROUND, HIS HANDS ARE HIS OWN AGAIN. THE THERMOS IS BACK ON HIS BELT.'],
+      ['hubie', "OKAY. I'M ME. I'M HUBIE. THAT... HAPPENED."],
     ],
   },
 ];
@@ -1550,6 +1548,11 @@ const EPILOGUE = [
   ['narrator', 'THE KIDS HEAD OUT IN THEIR COSTUMES, DRESSED AS THE PEOPLE THEY KNOW BEST — INCLUDING, THIS YEAR, A REC-LEAGUE REFEREE AND A GUY IN A DENIM JACKET.'],
   ['narrator', 'AND NOBODY THROWS A SINGLE EGG AT HUBIE. MOSTLY.'],
 ];
+
+// index of 'THROUGH THE RIFT' — from here on the run plays as Davey Stone:
+// no bike, no pals, no thermos upgrades. See beginLevel() for the reset.
+const CHAPTER2_START = 6;
+const isDavey = () => run.level >= CHAPTER2_START;
 
 const HINTS_KEYS = [
   '← → RIDE    SPACE JUMP (HOLD = HIGHER)',
@@ -1835,6 +1838,8 @@ const SCREAMS = ['AAAAH!', 'YIKES!', 'OH NO!', 'NOT THE FACE!', 'EEEEK!', 'MOMMY
 // of recovery vulnerability right at the end), then a cooldown before the
 // next one.
 const DODGE_SPEED = 250, DODGE_TIME = 0.32, DODGE_IFRAME = 0.28, DODGE_COOLDOWN = 0.85;
+// Davey's snowball: a fixed, non-upgradeable weapon (no soup/rapid/spread/flare/drill apply).
+const SNOWBALL_DMG = 1.5, SNOWBALL_CD = 0.34;
 let L = null, P = null;
 
 function makePlayer(x) {
@@ -2070,27 +2075,35 @@ function updatePlayer(dt) {
   P.wheelT += Math.abs(P.vx) * dt;
 
   if (!control) return;
-  // ---- shooting the thermos
+  // ---- shooting: Davey's fixed snowball, or Hubie's upgradeable thermos
   P.shootCd -= dt;
   if (Input.down('shoot') && P.shootCd <= 0) {
-    P.shootCd = 0.3 - run.upg.rapid * 0.06;
-    P.shotN++;
-    const every = run.upg.flare === 1 ? 4 : run.upg.flare >= 2 ? 3 : 0;
-    const flare = every > 0 && P.shotN % every === 0;
-    const dmg = 1 + run.upg.soup * 0.5;
     const ox = P.x + P.face * 10, oy = P.y - 15;
-    const angles = run.upg.spread === 0 ? [0] : run.upg.spread === 1 ? [-0.09, 0.09] : [-0.17, 0, 0.17];
-    angles.forEach((a, i) => {
-      const isFlare = flare && i === Math.floor(angles.length / 2);
-      L.shots.push({ x: ox, y: oy, vx: Math.cos(a) * 285 * P.face + P.vx * 0.3, vy: Math.sin(a) * 285, dmg: isFlare ? dmg + 1 : dmg,
-        life: 0.85, flare: isFlare, pierce: run.upg.drill > 0, hit: new Set(), kind: 'soup' });
-    });
-    Sound.play(flare ? 'flare' : 'shoot');
-    P.recoil = 0.08;
-    FX.burst(ox, oy, 2, ['#f4ecd8', '#9a94a8'], { angle: -Math.PI / 2, spread: 0.5, min: 10, max: 30, grav: -40, life: 0.4 });
+    if (isDavey()) {
+      P.shootCd = SNOWBALL_CD;
+      L.shots.push({ x: ox, y: oy, vx: 285 * P.face + P.vx * 0.3, vy: 0, dmg: SNOWBALL_DMG, life: 0.85, hit: new Set(), kind: 'snowball' });
+      Sound.play('shoot');
+      P.recoil = 0.08;
+      FX.burst(ox, oy, 3, ['#ffffff', '#a8e0ff'], { angle: -Math.PI / 2, spread: 0.5, min: 10, max: 30, grav: -40, life: 0.4 });
+    } else {
+      P.shootCd = 0.3 - run.upg.rapid * 0.06;
+      P.shotN++;
+      const every = run.upg.flare === 1 ? 4 : run.upg.flare >= 2 ? 3 : 0;
+      const flare = every > 0 && P.shotN % every === 0;
+      const dmg = 1 + run.upg.soup * 0.5;
+      const angles = run.upg.spread === 0 ? [0] : run.upg.spread === 1 ? [-0.09, 0.09] : [-0.17, 0, 0.17];
+      angles.forEach((a, i) => {
+        const isFlare = flare && i === Math.floor(angles.length / 2);
+        L.shots.push({ x: ox, y: oy, vx: Math.cos(a) * 285 * P.face + P.vx * 0.3, vy: Math.sin(a) * 285, dmg: isFlare ? dmg + 1 : dmg,
+          life: 0.85, flare: isFlare, pierce: run.upg.drill > 0, hit: new Set(), kind: 'soup' });
+      });
+      Sound.play(flare ? 'flare' : 'shoot');
+      P.recoil = 0.08;
+      FX.burst(ox, oy, 2, ['#f4ecd8', '#9a94a8'], { angle: -Math.PI / 2, spread: 0.5, min: 10, max: 30, grav: -40, life: 0.4 });
+    }
   }
-  // ---- megaphone holler
-  if (Input.hit('holler')) {
+  // ---- megaphone holler (Hubie's own gadget — Davey doesn't have it)
+  if (Input.hit('holler') && !isDavey()) {
     if (P.courage >= 100) doHoller();
     else { Sound.play('deny'); FX.text(P.x, P.y - 40, 'NOT BRAVE ENOUGH YET!', '#9a94a8', { life: 0.7 }); }
   }
@@ -2167,6 +2180,30 @@ function drawRider(o, x, y, face, angle, alpha = 1) {
   ctx.restore();
 }
 
+// Rotation-capable sprite draw: anchors the image's bottom-center at (x, y).
+function drawSprAt(img, x, y, flip, angle) {
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y));
+  ctx.scale(flip ? -1 : 1, 1);
+  if (angle) ctx.rotate(angle);
+  ctx.drawImage(img, -Math.round(img.width / 2), -img.height);
+  ctx.restore();
+}
+// Davey has no bike: he skates/skis, so he's drawn as a plain humanoid with a
+// leg-cycle tied to P.wheelT (same distance counter the bike wheels use) and
+// a full spin standing in for every bike-specific trick pose.
+function drawDavey(sx) {
+  if (P.bailT > 0 || P.dead) {
+    const t = P.dead ? P.deadT : 0.75 - P.bailT;
+    drawSprAt(S.davey[0], sx - P.face * t * 50, P.dead ? GROUND : P.y, P.face < 0, t * 12 * P.face);
+    return;
+  }
+  const img = S.davey[Math.floor(P.wheelT / 6) % 2];
+  const angle = P.trick ? (P.trick.t / P.trick.dur) * Math.PI * 2 : P.angle;
+  drawSprAt(img, sx, P.y, P.face < 0, angle);
+  if (P.hurtT <= 0) ctx.drawImage(SM.snowball, Math.round(sx + P.face * 7 - 2), Math.round(P.y - img.height + 7));
+}
+
 function drawPlayer() {
   const sx = P.x - L.camX;
   if (P.inv > 0 && !P.dead && Math.floor(P.inv * 16) % 2 === 1 && P.bailT <= 0) return;
@@ -2175,6 +2212,7 @@ function drawPlayer() {
     ctx.beginPath(); ctx.moveTo(Math.round(sx + P.face * 8) + 0.5, Math.round(P.y - 18)); ctx.lineTo(Math.round(sx + P.face * 30) + 0.5, 0); ctx.stroke();
     ctx.fillStyle = '#d0d0e0'; ctx.fillRect(Math.round(sx + P.face * 30) - 2, 0, 5, 2);
   }
+  if (isDavey()) { drawDavey(sx); return; }
   if (P.bailT > 0 || P.dead) {
     const t = P.dead ? P.deadT : 0.75 - P.bailT;
     drawRider({ who: 'hubie', bike: BIKES.hubie, noRider: true, wheelT: P.wheelT }, sx - P.face * t * 20, P.dead ? GROUND : P.y, P.face, Math.PI / 2 * P.face * 0.9);
@@ -2277,19 +2315,6 @@ function updatePals(dt) {
         Sound.play(id === 'richie' ? 'tackle' : 'bark'); st.say = 0.8; st.sayText = id === 'richie' ? 'HUT HUT!' : 'WOOF!';
         st.cd = id === 'richie' ? 4.5 : 3.5;
       } else st.cd = 0.4;
-    } else if (id === 'whitey') {
-      const e = nearestEnemy(cx, cy, 200, (en) => (en.x - cx) * P.face > 0);
-      if (e) {
-        L.shots.push({ x: cx + P.face * 6, y: cy, vx: 340 * P.face, vy: 0, dmg: 1.5, life: 0.7, pierce: true, hit: new Set(), kind: 'puckshot' });
-        Sound.play('whistle'); st.say = 1.0; st.sayText = 'HEADS UP!'; st.cd = 1.7;
-      } else st.cd = 0.3;
-    } else if (id === 'davey') {
-      const e = nearestEnemy(cx, cy, 190);
-      if (e) {
-        const T = 0.55, tx = e.x + e.w / 2 + e.vx * T, ty = e.y + e.h / 2;
-        L.shots.push({ x: cx, y: cy - 6, vx: (tx - cx) / T, vy: (ty - cy + 6 - 0.5 * 420 * T * T) / T, grav: 420, dmg: 2, life: 1.3, hit: new Set(), kind: 'basketball' });
-        Sound.play('lob'); st.say = 1.0; st.sayText = 'SWISH!'; st.cd = 1.6;
-      } else st.cd = 0.3;
     }
   });
 }
@@ -2532,7 +2557,7 @@ function updateEshots(dt) {
     const box = { x: s.x - s.w / 2, y: s.y - s.h / 2, w: s.w, h: s.h };
     if (!P.dead && overlap(box, pbox(P))) {
       if (s.kind === 'wave' && !P.onGround) continue;
-      if (P.inv <= 0 && P.bailT <= 0) { hurt(1, s.kind === 'egg' ? 'EGGED!' : s.kind === 'tp' ? 'TP\'D!' : null); popEshot(s); }
+      if (P.inv <= 0 && P.bailT <= 0) { hurt(1, s.kind === 'egg' ? 'EGGED!' : s.kind === 'tp' ? 'TP\'D!' : s.kind === 'snowball' ? 'SNOWBALLED!' : null); popEshot(s); }
     }
     if (s.x < L.camX - 60 || s.x > L.camX + W + 80 || s.y > H + 20) s.dead = true;
   }
@@ -2541,7 +2566,7 @@ function updateEshots(dt) {
 function drawEshots() {
   for (const s of L.eshots) {
     const sx = Math.round(s.x - L.camX), sy = Math.round(s.y);
-    const img = { egg: SM.egg, tp: SM.tp, potion: SM.potion, rollpumpkin: SM.pumpkinSm, flame: SM.pumpkinSm, gas: SM.gas }[s.kind];
+    const img = { egg: SM.egg, tp: SM.tp, potion: SM.potion, rollpumpkin: SM.pumpkinSm, flame: SM.pumpkinSm, gas: SM.gas, snowball: SM.snowball }[s.kind];
     if (s.kind === 'wave') {
       ctx.fillStyle = '#d0d0e0'; ctx.fillRect(sx - 5, sy - 3, 10, 7);
       ctx.fillStyle = '#9a94a8'; ctx.fillRect(sx - 3, sy - 6, 6, 3);
@@ -2562,7 +2587,7 @@ function updateShots(dt) {
     s.life -= dt;
     if (s.grav) s.vy += s.grav * dt;
     s.x += s.vx * dt; s.y += s.vy * dt;
-    if (s.kind === 'soup' && Math.random() < 0.35) FX.parts.push({ x: s.x, y: s.y, vx: rand(-8, 8), vy: -18, life: 0.35, color: '#f4ecd8', size: 1, grav: -10 });
+    if ((s.kind === 'soup' || s.kind === 'snowball') && Math.random() < 0.35) FX.parts.push({ x: s.x, y: s.y, vx: rand(-8, 8), vy: -18, life: 0.35, color: '#f4ecd8', size: 1, grav: -10 });
     if (s.flare && Math.random() < 0.8) FX.parts.push({ x: s.x, y: s.y, vx: rand(-20, 20), vy: rand(-20, 20), life: 0.3, color: choose(['#ff6a1f', '#ffd23f']), size: 1, grav: 0 });
     const r = s.kind === 'ring' ? 5 : 3;
     const box = { x: s.x - r, y: s.y - r, w: r * 2, h: r * 2 };
@@ -2614,6 +2639,7 @@ function drawShots() {
     if (s.kind === 'apple') ctx.drawImage(SM.apple, sx - 2, sy - 2);
     else if (s.kind === 'basketball') ctx.drawImage(SM.basketball, sx - 2, sy - 2);
     else if (s.kind === 'puckshot') ctx.drawImage(SM.puckshot, sx - 2, sy - 1);
+    else if (s.kind === 'snowball') ctx.drawImage(SM.snowball, sx - 2, sy - 2);
     else if (s.kind === 'ring') { ctx.strokeStyle = '#7f9fec'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(sx, sy, 4, -1.2, 1.2); ctx.stroke(); ctx.beginPath(); ctx.arc(sx - 3, sy, 3, -1.2, 1.2); ctx.stroke(); }
     else if (s.flare) ctx.drawImage(SM.flare, sx - 3, sy - 2);
     else ctx.drawImage(SM.soup, sx - 2, sy - 2);
@@ -2725,11 +2751,37 @@ const BOSS_INFO = {
   stinger: { name: 'COACH STINGER', hp: 230, w: 18, h: 19 },
   duke2: { name: 'DUKE MALLOY (FURIOUS)', hp: 280, w: 18, h: 19 },
 };
+// ---- DPS-based boss scaling: a fully-upgraded thermos trivializes a boss
+// tuned for a fresh one, so bosses in the back half of the run were getting
+// steamrolled. Estimate the player's (+ posse's) sustained damage against a
+// boss specifically (BOSS_DMG_MULT applies) and grow the boss's HP with it,
+// floored at the original hand-tuned value (so an unupgraded run — or Davey,
+// who never has upgrades — always gets exactly the designed fight) and
+// capped so a maxed-out build still gets a real fight, not an eternal one.
+function calcPlayerDPS() {
+  if (isDavey()) return SNOWBALL_DMG / SNOWBALL_CD; // fixed weapon, no upgrades to scale from
+  const fireRate = 1 / Math.max(0.06, 0.3 - run.upg.rapid * 0.06);
+  const pellets = run.upg.spread === 0 ? 1 : run.upg.spread === 1 ? 2 : 3;
+  const dmgPerPellet = 1 + run.upg.soup * 0.5;
+  const every = run.upg.flare === 1 ? 4 : run.upg.flare >= 2 ? 3 : 0;
+  const flareBonus = every > 0 ? 1 / every : 0;
+  const rawDps = fireRate * (pellets * dmgPerPellet + flareBonus);
+  const bossDps = rawDps * BOSS_DMG_MULT.soup;
+  const palDps = run.pals.length * 0.65 * BOSS_DMG_MULT.pal;
+  return bossDps + palDps;
+}
+const BOSS_FIGHT_SECONDS = 16;
+const BOSS_HP_MAX_MULT = 4.5;
+function scaleBossHp(baseHp) {
+  const target = calcPlayerDPS() * BOSS_FIGHT_SECONDS;
+  return Math.round(clamp(target, baseHp, baseHp * BOSS_HP_MAX_MULT));
+}
 function spawnBoss(kind) {
   const ax = L.arenaX, info = BOSS_INFO[kind];
-  const e = { type: 'boss', kind, boss: true, name: info.name, x: ax + W - 70, y: GROUND - info.h, w: info.w, h: info.h, hp: info.hp, maxHp: info.hp,
+  const hp = scaleBossHp(info.hp);
+  const e = { type: 'boss', kind, boss: true, name: info.name, x: ax + W - 70, y: GROUND - info.h, w: info.w, h: info.h, hp, maxHp: hp,
     vx: 0, vy: 0, face: -1, t: 0, st: 0, state: 'intro', cd: 1.2, onGround: true, active: true, stun: 0, flash: 0, anim: 0, inv: 0,
-    def: { fly: false, pts: 2500, candy: 0 }, stompCd: 0 };
+    def: { fly: false, pts: 2500, candy: 0 }, stompCd: 0, phase: 1 };
   if (kind === 'wagon' || kind === 'grabinski') { e.x = ax + W + 20; e.state = 'enter'; }
   if (kind === 'mike') { e.targetX = ax + 40; e.state = 'ride'; }
   if (kind === 'kidnapper') e.x = ax + W - 50;
@@ -2754,6 +2806,24 @@ function bossThrowEgg(e, kind = 'egg', spread = 0) {
   const T = 0.75;
   throwAt(kind, e.x + e.w / 2, e.y + 6, P.x + P.vx * 0.4 + spread, P.y - 12, T, 380);
 }
+// ---- boss phases: the angry/furious HP thresholds already reshape every
+// boss's attack pattern below; this just gives that escalation a name, a
+// one-time callout, and an arena-wide environmental hazard that ramps up
+// alongside it so the fight itself keeps getting more dangerous, not just
+// the boss's own attacks.
+function onBossPhaseChange(e) {
+  FX.shake = 7; FX.flash = 0.35; FX.flashColor = e.phase >= 3 ? '#ff3b3b' : '#ffd23f';
+  Sound.play('enrage');
+  const label = e.phase >= 3 ? e.name + ' IS FURIOUS!' : e.name + ' IS ANGRY!';
+  FX.text(e.x + e.w / 2, e.y - 14, label, e.phase >= 3 ? '#ff3b3b' : '#ffd23f', { life: 1.5, scale: 1.2, vy: -14 });
+}
+const ARENA_DANGER_CD = [null, 3.4, 2.2, 1.3]; // indexed by e.phase (1/2/3)
+function spawnArenaDanger(e) {
+  const ax = L.arenaX;
+  const kind = isDavey() ? 'snowball' : 'egg';
+  L.eshots.push({ kind, x: rand(ax + 20, ax + W - 20), y: -10, vx: rand(-20, 20), vy: rand(140, 190), grav: 260, w: 5, h: 5, life: 4, t: 0 });
+  Sound.play('throw');
+}
 function updateBoss(e, dt) {
   e.flash = Math.max(0, e.flash - dt); e.inv = Math.max(0, e.inv - dt); e.stompCd = Math.max(0, e.stompCd - dt);
   if (e.down) { e.t += dt; if ((e.kind === 'wagon' || e.kind === 'grabinski') && Math.random() < 0.3) FX.parts.push({ x: e.x + 60, y: e.y + 8, vx: rand(-10, 10), vy: -30, life: 0.9, color: '#4a4658', size: 2, grav: -10 }); return; }
@@ -2761,6 +2831,11 @@ function updateBoss(e, dt) {
   e.t += dt; e.st += dt; e.anim += dt; e.cd -= dt;
   const ax = L.arenaX, dx = P.x - (e.x + e.w / 2);
   const angry = e.hp < e.maxHp * 0.5, furious = e.hp < e.maxHp * 0.3;
+  const phase = furious ? 3 : angry ? 2 : 1;
+  if (phase > e.phase) { e.phase = phase; onBossPhaseChange(e); }
+  if (e.dangerCd == null) e.dangerCd = ARENA_DANGER_CD[1];
+  e.dangerCd -= dt;
+  if (e.dangerCd <= 0) { spawnArenaDanger(e); e.dangerCd = ARENA_DANGER_CD[e.phase] * rand(0.8, 1.2); }
   if (e.kind === 'mike') {
     if (e.state === 'ride') {
       const d = e.targetX - (e.x + e.w / 2);
@@ -3116,6 +3191,12 @@ function startLevel(idx, fromCP) {
   Sound.playMusic(L.def.music);
 }
 function beginLevel(idx) {
+  if (idx === CHAPTER2_START) {
+    // through the rift: Davey Stone has none of Hubie's thermos gadgets or posse.
+    run.upg = {}; UPGRADES.forEach((u) => { run.upg[u.id] = 0; });
+    run.pals = [];
+    run.hearts = maxHearts();
+  }
   run.levelStart = { candy: run.candy, score: run.score, pals: run.pals.slice() };
   run.cp = null;
   levelStats = { stats: snapshotStats(), pals: run.pals.length };
@@ -3285,7 +3366,8 @@ function drawHUD() {
     drawText(b.name, W / 2, y - 9, '#ff6a1f', { align: 'center', outline: '#140c1c' });
     ctx.fillStyle = '#140c1c'; ctx.fillRect(x - 1, y - 1, w + 2, 7);
     ctx.fillStyle = '#4b2a7a'; ctx.fillRect(x, y, w, 5);
-    ctx.fillStyle = '#d83a3a'; ctx.fillRect(x, y, Math.round((w * Math.max(0, b.hp)) / b.maxHp), 5);
+    ctx.fillStyle = b.phase >= 3 ? '#ff3b3b' : b.phase >= 2 ? '#ffd23f' : '#d83a3a';
+    ctx.fillRect(x, y, Math.round((w * Math.max(0, b.hp)) / b.maxHp), 5);
   }
   if (L.level === 0 && L.bannerT > 3 && L.bannerT < 3 + 5 * HINTS_KEYS.length) {
     const hints = Input.isTouch() ? HINTS_TOUCH : HINTS_KEYS;
@@ -3477,6 +3559,7 @@ function updateComplete() {
   if (stateT > 0.6 && (Input.confirm() || Input.takeClick())) {
     Sound.play('confirm');
     if (run.level >= LEVELS.length - 1) { startStory(EPILOGUE, () => { Sound.playMusic('happy'); setState('credits'); }, 'epilogue'); }
+    else if (run.level + 1 > CHAPTER2_START) { beginLevel(run.level + 1); } // Davey has no thermos workbench to visit
     else {
       momLine = choose(run.level === 4 ? ["GO GET 'EM, HUBIE. I'LL BE... AROUND."]
         : run.level === 5 ? ['I DON\'T KNOW WHAT THAT WEIRD LIGHT IN THE SKY IS, BUT I ALREADY HATE IT.']
