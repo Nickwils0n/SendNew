@@ -122,6 +122,7 @@
     <button data-act="holler" aria-label="Megaphone holler">HOLLER</button>
     <button data-act="shoot" aria-label="Shoot thermos">SHOOT</button>
     <button data-act="jump" aria-label="Jump">JUMP</button>
+    <button data-act="dodge" aria-label="Dodge">DODGE</button>
   </div>
 </div>
 <script>
@@ -262,7 +263,7 @@ const Input = (() => {
   const BIND = {
     left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'],
     jump: ['Space', 'KeyZ', 'ArrowUp', 'KeyW'], shoot: ['KeyX', 'KeyJ'], trick: ['KeyC', 'KeyK'],
-    holler: ['KeyV', 'KeyL'], start: ['Enter', 'NumpadEnter'], pause: ['KeyP', 'Escape'], mute: ['KeyM'],
+    holler: ['KeyV', 'KeyL'], dodge: ['ShiftLeft', 'ShiftRight', 'KeyQ'], start: ['Enter', 'NumpadEnter'], pause: ['KeyP', 'Escape'], mute: ['KeyM'],
     back: ['Escape', 'Backspace'],
   };
   const GAME_KEYS = new Set([].concat(...Object.values(BIND)));
@@ -316,6 +317,7 @@ const Input = (() => {
       if (b(2) || b(7)) out.shoot = true;
       if (b(1) || b(5)) out.trick = true;
       if (b(3) || b(4)) out.holler = true;
+      if (b(6)) out.dodge = true;
       if (b(9)) { out.start = true; out.pause = true; }
     }
     return out;
@@ -402,6 +404,7 @@ const Sound = (() => {
     flare: () => { tone({ type: 'sawtooth', f0: 300, f1: 900, dur: 0.18, vol: 0.12 }); noise({ dur: 0.2, vol: 0.1, freq: 1500 }); },
     jump: () => tone({ type: 'square', f0: 260, f1: 560, dur: 0.11, vol: 0.1 }),
     grapple: () => { tone({ type: 'triangle', f0: 900, f1: 1400, dur: 0.1, vol: 0.14 }); noise({ dur: 0.08, vol: 0.08, filter: 'highpass', freq: 5000 }); },
+    dodge: () => { tone({ type: 'sawtooth', f0: 700, f1: 200, dur: 0.16, vol: 0.13 }); noise({ dur: 0.14, vol: 0.1, filter: 'highpass', freq: 3500, f1: 1200 }); },
     land: () => noise({ dur: 0.06, vol: 0.12, freq: 700 }),
     candy: () => { tone({ type: 'triangle', f0: 988, dur: 0.05, vol: 0.13 }); tone({ type: 'triangle', f0: 1319, dur: 0.09, vol: 0.13, delay: 0.05 }); },
     bigcandy: () => arp(['c6', 'e6', 'g6', 'c7'], 0.05, 'triangle', 0.14),
@@ -1554,6 +1557,7 @@ const HINTS_KEYS = [
   'IN THE AIR: C = TRICK. ADD ↑ ↓ ← → FOR OTHER TRICKS',
   'LAND TRICKS TO FILL COURAGE, THEN V = HOLLER!',
   'LAND ON PUMPKINS TO SMASH THEM. JUMP THE REST!',
+  'SHIFT = DODGE! A QUICK ROLL WITH A FLASH OF I-FRAMES.',
 ];
 const HINTS_TOUCH = [
   'USE ← → TO RIDE, JUMP TO JUMP',
@@ -1561,6 +1565,7 @@ const HINTS_TOUCH = [
   'IN THE AIR: TRICK. HOLD ← → OR ↓ FOR OTHER TRICKS',
   'LAND TRICKS TO FILL COURAGE, THEN HOLLER!',
   'LAND ON PUMPKINS TO SMASH THEM. JUMP THE REST!',
+  'DODGE = A QUICK ROLL WITH A FLASH OF INVINCIBILITY.',
 ];
 
 // ============================================================
@@ -1825,13 +1830,19 @@ const TRICKS = {
   cancan: { name: 'CAN-CAN', dur: 0.45, pts: 150 },
 };
 const SCREAMS = ['AAAAH!', 'YIKES!', 'OH NO!', 'NOT THE FACE!', 'EEEEK!', 'MOMMY!'];
+// Souls-style dodge roll: a quick committed burst with i-frames covering
+// nearly all of it (a hair short of the full duration, so there's a sliver
+// of recovery vulnerability right at the end), then a cooldown before the
+// next one.
+const DODGE_SPEED = 250, DODGE_TIME = 0.32, DODGE_IFRAME = 0.28, DODGE_COOLDOWN = 0.85;
 let L = null, P = null;
 
 function makePlayer(x) {
   return { x, y: GROUND, vx: 40, vy: 0, w: 14, h: 24, onGround: true, face: 1, jumpHold: 0, airJumps: run.upg.grapple ? 1 : 0,
     trick: null, combo: [], airT: 0, inv: 1.0, hurtT: 0, bailT: 0, shootCd: 0, shotN: 0,
     umbrella: run.upg.umbrella > 0 ? 1 : 0, umbT: 0, umbShow: 0, courage: 0, pedal: 0, wheelT: 0, angle: 0,
-    rampRef: null, coyote: 0, jumpBuf: 0, grappleT: 0, hollerT: 0, recoil: 0, prevY: GROUND, dead: false, readyShown: false };
+    rampRef: null, coyote: 0, jumpBuf: 0, grappleT: 0, hollerT: 0, recoil: 0, prevY: GROUND, dead: false, readyShown: false,
+    dodgeT: 0, dodgeCd: 0, dodgeDir: 1 };
 }
 const pbox = (p) => ({ x: p.x - p.w / 2, y: p.y - p.h, w: p.w, h: p.h });
 const courageMult = () => 1 + 0.3 * run.upg.megaphone;
@@ -1912,6 +1923,8 @@ function updatePlayer(dt) {
   P.grappleT = Math.max(0, P.grappleT - dt);
   P.hollerT = Math.max(0, P.hollerT - dt);
   P.recoil = Math.max(0, P.recoil - dt);
+  P.dodgeT = Math.max(0, P.dodgeT - dt);
+  P.dodgeCd = Math.max(0, P.dodgeCd - dt);
   if (run.upg.umbrella > 0 && P.umbrella === 0) { P.umbT -= dt; if (P.umbT <= 0) { P.umbrella = 1; FX.text(P.x, P.y - 40, 'UMBRELLA READY', '#7f9fec', { life: 0.8 }); } }
 
   if (P.dead) {
@@ -1921,17 +1934,31 @@ function updatePlayer(dt) {
   const control = P.bailT <= 0 && !L.won && !L.cutscene;
   if (P.bailT > 0) P.bailT -= dt;
 
+  // ---- dodge roll: a quick directional burst with i-frames, Souls-style ----
+  if (control && P.onGround && !P.trick && P.dodgeT <= 0 && P.dodgeCd <= 0 && Input.hit('dodge')) {
+    P.dodgeDir = Input.down('left') ? -1 : Input.down('right') ? 1 : P.face;
+    P.dodgeT = DODGE_TIME; P.dodgeCd = DODGE_COOLDOWN;
+    P.inv = Math.max(P.inv, DODGE_IFRAME);
+    P.trick = null; P.combo = [];
+    Sound.play('dodge');
+    FX.burst(P.x - P.dodgeDir * 6, P.y - 10, 10, ['#f4ecd8', '#9a94a8', '#c8c0e0'], { angle: P.dodgeDir > 0 ? Math.PI : 0, spread: 0.5, min: 30, max: 90 });
+  } else if (control && Input.hit('dodge') && P.onGround && !P.trick) {
+    Sound.play('deny'); FX.text(P.x, P.y - 40, 'STILL RECOVERING...', '#9a94a8', { life: 0.6 });
+  }
+
   // ---- horizontal control
   const icy = L.def.icy;
   const dir = control ? (Input.down('right') ? 1 : 0) - (Input.down('left') ? 1 : 0) : (L.won ? 1 : 0);
-  if (dir !== 0) {
+  if (P.dodgeT > 0) {
+    P.vx = P.dodgeDir * DODGE_SPEED; P.face = P.dodgeDir;
+  } else if (dir !== 0) {
     P.vx += dir * (P.onGround ? (icy ? 250 : 340) : 210) * dt;
     if (P.onGround || !P.trick) P.face = dir;
   } else {
     const fr = P.onGround ? (icy ? 130 : 230) : 40;
     P.vx -= sign(P.vx) * Math.min(Math.abs(P.vx), fr * dt);
   }
-  P.vx = clamp(P.vx, L.won ? 0 : -130, 155);
+  if (P.dodgeT <= 0) P.vx = clamp(P.vx, L.won ? 0 : -130, 155);
   if (L.won && P.vx < 70) P.vx = 70;
 
   // ---- jumping (coyote time + buffer), grappling hook double jump
@@ -3260,7 +3287,7 @@ function drawHUD() {
     ctx.fillStyle = '#4b2a7a'; ctx.fillRect(x, y, w, 5);
     ctx.fillStyle = '#d83a3a'; ctx.fillRect(x, y, Math.round((w * Math.max(0, b.hp)) / b.maxHp), 5);
   }
-  if (L.level === 0 && L.bannerT > 3 && L.bannerT < 3 + 5 * 5) {
+  if (L.level === 0 && L.bannerT > 3 && L.bannerT < 3 + 5 * HINTS_KEYS.length) {
     const hints = Input.isTouch() ? HINTS_TOUCH : HINTS_KEYS;
     const i = Math.floor((L.bannerT - 3) / 5);
     ctx.fillStyle = 'rgba(20,12,28,0.8)'; ctx.fillRect(0, H - 13, W, 13);
@@ -3410,9 +3437,10 @@ function drawHelp() {
   drawText('HOW TO PLAY', W / 2, 14, '#f08a24', { align: 'center', scale: 2 });
   const rows = [
     ['← →  / A D', 'RIDE (STOP, REVERSE)'], ['SPACE / Z / ↑', 'JUMP  (HOLD = HIGHER)'], ['X / J', 'SHOOT THE THERMOS'],
-    ['C / K  (IN AIR)', 'TRICK. ADD ↑ ↓ ← → TO MIX'], ['V / L', 'HUBIE HOLLER (FULL COURAGE)'], ['P / ESC', 'PAUSE     M = MUTE'],
+    ['C / K  (IN AIR)', 'TRICK. ADD ↑ ↓ ← → TO MIX'], ['V / L', 'HUBIE HOLLER (FULL COURAGE)'],
+    ['SHIFT / Q', 'DODGE ROLL (BRIEF I-FRAMES)'], ['P / ESC', 'PAUSE     M = MUTE'],
   ];
-  rows.forEach(([k, v], i) => { drawText(k, 22, 36 + i * 11, '#ffd23f'); drawText(v, 128, 36 + i * 11, '#f4ecd8'); });
+  rows.forEach(([k, v], i) => { drawText(k, 22, 34 + i * 9, '#ffd23f'); drawText(v, 128, 34 + i * 9, '#f4ecd8'); });
   const tips = ['LAND TRICKS FOR POINTS, CANDY AND COURAGE.', 'LANDING MID-TRICK = BAIL. YOU DROP CANDY!', 'STOMP ENEMIES AND PUMPKINS FROM ABOVE.',
     'RIDE INTO FRIENDS WITH A ! TO ADD THEM TO', 'YOUR POSSE. SPEND CANDY CORN ON THERMOS', 'GADGETS AT THE WORKBENCH BETWEEN LEVELS.'];
   tips.forEach((tp, i) => drawText(tp, W / 2, 106 + i * 9, '#c8c0e0', { align: 'center' }));
