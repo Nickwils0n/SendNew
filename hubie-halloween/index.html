@@ -2057,8 +2057,10 @@ function throwAt(kind, x, y, tx, ty, T, grav) {
   Sound.play('throw');
   return s;
 }
+const BOSS_DMG_MULT = { soup: 0.5, flare: 0.85, holler: 0.75, pal: 0.55, stomp: 1 };
 function damageEnemy(e, dmg, src) {
   if (e.dead || e.down || e.hidden || e.inv > 0 || (e.buried && e.rise < 1)) return;
+  if (e.boss) dmg *= BOSS_DMG_MULT[src] != null ? BOSS_DMG_MULT[src] : 0.6;
   e.hp -= dmg; e.flash = 0.14;
   Sound.play(e.boss ? 'bosshit' : 'hit');
   FX.burst(e.x + e.w / 2, e.y + e.h / 2, 4, ['#f08a24', '#ffd23f', '#f4ecd8'], { max: 60 });
@@ -2438,10 +2440,10 @@ function drawPickups() {
 // BOSSES
 // ============================================================
 const BOSS_INFO = {
-  mike: { name: 'MIKE THE BULLY', hp: 26, w: 20, h: 28 },
-  wagon: { name: 'THE HENNESSEYS', hp: 40, w: 70, h: 26 },
-  pete: { name: 'PETE LANDOLFA', hp: 55, w: 18, h: 28 },
-  kidnapper: { name: 'THE KIDNAPPER', hp: 75, w: 18, h: 28 },
+  mike: { name: 'MIKE THE BULLY', hp: 46, w: 20, h: 28 },
+  wagon: { name: 'THE HENNESSEYS', hp: 70, w: 70, h: 26 },
+  pete: { name: 'PETE LANDOLFA', hp: 96, w: 18, h: 28 },
+  kidnapper: { name: 'THE KIDNAPPER', hp: 130, w: 18, h: 28 },
 };
 function spawnBoss(kind) {
   const ax = L.arenaX, info = BOSS_INFO[kind];
