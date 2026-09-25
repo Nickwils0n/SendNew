@@ -1942,15 +1942,18 @@ function updatePlayer(dt) {
   const control = P.bailT <= 0 && !L.won && !L.cutscene;
   if (P.bailT > 0) P.bailT -= dt;
 
-  // ---- dodge roll: a quick directional burst with i-frames, Souls-style ----
-  if (control && P.onGround && !P.trick && P.dodgeT <= 0 && P.dodgeCd <= 0 && Input.hit('dodge')) {
+  // ---- dodge roll: a quick directional burst with i-frames, Souls-style.
+  // Works in the air too (a horizontal burst through the current fall/rise,
+  // gravity untouched) so a mistimed jump isn't a dead end against a thrown
+  // attack.
+  if (control && !P.trick && P.dodgeT <= 0 && P.dodgeCd <= 0 && Input.hit('dodge')) {
     P.dodgeDir = Input.down('left') ? -1 : Input.down('right') ? 1 : P.face;
     P.dodgeT = DODGE_TIME; P.dodgeCd = DODGE_COOLDOWN;
     P.inv = Math.max(P.inv, DODGE_IFRAME);
     P.trick = null; P.combo = [];
     Sound.play('dodge');
     FX.burst(P.x - P.dodgeDir * 6, P.y - 10, 10, ['#f4ecd8', '#9a94a8', '#c8c0e0'], { angle: P.dodgeDir > 0 ? Math.PI : 0, spread: 0.5, min: 30, max: 90 });
-  } else if (control && Input.hit('dodge') && P.onGround && !P.trick) {
+  } else if (control && Input.hit('dodge') && !P.trick) {
     Sound.play('deny'); FX.text(P.x, P.y - 40, 'STILL RECOVERING...', '#9a94a8', { life: 0.6 });
   }
 
@@ -2809,16 +2812,33 @@ function bossThrowEgg(e, kind = 'egg', spread = 0) {
   const T = 0.75;
   throwAt(kind, e.x + e.w / 2, e.y + 6, predictedAim() + spread, P.y - 12, T, 380);
 }
+// One in-character taunt line per boss per phase (2 = angry, 3 = furious),
+// spoken through the normal dialogue box. The kidnapper's identity is a
+// mid-campaign secret, so their lines stay masked narration under the
+// existing "???" CAST entry instead of a named voice.
+const BOSS_TAUNTS = {
+  mike: { 2: ['mike', "OKAY, NOW YOU'RE JUST BEING ANNOYING!"], 3: ['mike', "I'M TELLING EVERYONE YOU CHEAT AT THIS!"] },
+  wagon: { 2: ['mrshennessey', 'OH, YOU WANT TO PLAY ROUGH? FINE!'], 3: ['mrshennessey', 'HONEY, FLOOR IT!'] },
+  pete: { 2: ['pete', 'RAAAWR! I MEAN IT THIS TIME!'], 3: ['pete', "OKAY, NOW I'M ACTUALLY MAD, DUBOIS!"] },
+  kidnapper: { 2: ['kidnapper', 'A MUFFLED, FURIOUS GROWL ECHOES FROM BEHIND THE MASK.'], 3: ['kidnapper', 'THE TORCH SWINGS WILDER. WHOEVER THIS IS, THEY ARE DONE PLAYING.'] },
+  duke: { 2: ['duke', "YOU DON'T GET TO WIN ON MY ICE, STONE!"], 3: ['duke', 'THAT DOES IT! NO MORE MR. NICE DUKE!'] },
+  duke2: { 2: ['duke', "SECOND TIME'S NOT THE CHARM, STONE!"], 3: ['duke', "I SHOULD'VE FINISHED THIS AT THE POND!"] },
+  grabinski: { 2: ['grabinski', "THAT'S RESISTING A LAWFUL— OKAY, MALL-LAWFUL ORDER!"], 3: ['grabinski', "I'M CALLING THIS IN! TO MYSELF!"] },
+  stinger: { 2: ['stinger', "TIMEOUT'S OVER! REFS, YOU SEEING THIS?!"], 3: ['stinger', "THAT'S A TECHNICAL FOUL ON YOUR FACE, STONE!"] },
+};
 // ---- boss phases: the angry/furious HP thresholds already reshape every
 // boss's attack pattern below; this just gives that escalation a name, a
 // one-time callout, and an arena-wide environmental hazard that ramps up
 // alongside it so the fight itself keeps getting more dangerous, not just
-// the boss's own attacks.
+// the boss's own attacks. The taunt line itself is deferred to a safe
+// top-level check in updatePlay rather than fired here mid-loop, so it
+// never cuts to the dialogue box in the middle of this frame's update.
 function onBossPhaseChange(e) {
   FX.shake = 7; FX.flash = 0.35; FX.flashColor = e.phase >= 3 ? '#ff3b3b' : '#ffd23f';
   Sound.play('enrage');
   const label = e.phase >= 3 ? e.name + ' IS FURIOUS!' : e.name + ' IS ANGRY!';
   FX.text(e.x + e.w / 2, e.y - 14, label, e.phase >= 3 ? '#ff3b3b' : '#ffd23f', { life: 1.5, scale: 1.2, vy: -14 });
+  e.pendingTaunt = e.phase;
 }
 const ARENA_DANGER_CD = [null, 3.4, 2.2, 1.3]; // indexed by e.phase (1/2/3)
 function spawnArenaDanger(e) {
@@ -2826,6 +2846,14 @@ function spawnArenaDanger(e) {
   const kind = isDavey() ? 'snowball' : 'egg';
   L.eshots.push({ kind, x: rand(ax + 20, ax + aw - 20), y: -10, vx: rand(-20, 20), vy: rand(140, 190), grav: 260, w: 5, h: 5, life: 4, t: 0 });
   Sound.play('throw');
+}
+// A deli sandwich (same heal-a-heart pickup used out in the levels) drops
+// into the arena every so often — a rare, risky bit of relief for a fight
+// that's dragging on, not a guaranteed heal for every attempt.
+const ARENA_SANDWICH_CD = 15;
+function spawnArenaSandwich() {
+  const ax = L.arenaX, aw = L.arenaW || ARENA_W;
+  L.pickups.push({ kind: 'sandwich', x: rand(ax + 30, ax + aw - 30), y: -10, vx: rand(-15, 15), vy: 0, life: 11 });
 }
 // A boss's thrown shots used to aim dead-on at the player's predicted
 // position (P.x + P.vx * lead), which reads as unavoidable "pinpoint"
@@ -2847,6 +2875,9 @@ function updateBoss(e, dt) {
   if (e.dangerCd == null) e.dangerCd = ARENA_DANGER_CD[1];
   e.dangerCd -= dt;
   if (e.dangerCd <= 0) { spawnArenaDanger(e); e.dangerCd = ARENA_DANGER_CD[e.phase] * rand(0.8, 1.2); }
+  if (e.sandwichCd == null) e.sandwichCd = ARENA_SANDWICH_CD;
+  e.sandwichCd -= dt;
+  if (e.sandwichCd <= 0) { spawnArenaSandwich(); e.sandwichCd = ARENA_SANDWICH_CD * rand(0.85, 1.2); }
   if (e.kind === 'mike') {
     if (e.state === 'ride') {
       const d = e.targetX - (e.x + e.w / 2);
@@ -3251,6 +3282,11 @@ function updateVictims(dt) { for (const v of L.victims) if (v.freed) { v.t += dt
 
 function updatePlay(dt) {
   if (Input.hit('pause')) { setState('pause'); Sound.play('select'); return; }
+  if (L.boss && L.boss.pendingTaunt && !L.boss.down) {
+    const taunt = (BOSS_TAUNTS[L.boss.kind] || {})[L.boss.pendingTaunt];
+    L.boss.pendingTaunt = 0;
+    if (taunt) { startStory([taunt], () => setState('play'), 'level'); return; }
+  }
   L.time += dt; L.bannerT += dt;
   updatePlayer(dt);
   updatePals(dt);
@@ -3427,10 +3463,39 @@ function updateStory(dt) {
     else { const done = scene.onDone; scene = null; done(); }
   }
 }
-function drawPortrait(who, x, y) {
-  ctx.fillStyle = '#140c1c'; ctx.fillRect(x, y, 40, 42);
-  ctx.fillStyle = '#3a2350'; ctx.fillRect(x + 1, y + 1, 38, 40);
+// Pixel-art "rounded" panel: a flat-filled rect with a small stair-step
+// corner notch. True circular corners would anti-alias against this game's
+// otherwise fully hard-edged pixel art, so the "rounding" is a deliberate
+// 1-2px chamfer instead of an arc.
+function pixelPanel(x, y, w, h, fill, border, ch = 2) {
+  const step = (px, py, pw, ph, color) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(px + ch, py, pw - ch * 2, ph);
+    ctx.fillRect(px, py + ch, pw, ph - ch * 2);
+    for (let i = 0; i < ch; i++) {
+      const w2 = ch - i;
+      ctx.fillRect(px + i, py + (ch - 1 - i), w2, 1);
+      ctx.fillRect(px + pw - i - w2, py + (ch - 1 - i), w2, 1);
+      ctx.fillRect(px + i, py + ph - (ch - i), w2, 1);
+      ctx.fillRect(px + pw - i - w2, py + ph - (ch - i), w2, 1);
+    }
+  };
+  step(x, y, w, h, border);
+  step(x + 2, y + 2, w - 4, h - 4, fill);
+}
+function fillDiamond(cx, cy, r, color) {
+  ctx.fillStyle = color;
+  for (let dy = -r; dy <= r; dy++) {
+    const half = r - Math.abs(dy);
+    if (half >= 0) ctx.fillRect(Math.round(cx - half), Math.round(cy + dy), half * 2 + 1, 1);
+  }
+}
+function drawPortrait(who, cx, cy, r) {
+  fillDiamond(cx, cy, r, '#5c3a1c');
+  fillDiamond(cx, cy, r - 3, '#ecd27a');
+  fillDiamond(cx, cy, r - 5, '#140c1c');
   if (who === 'radio') {
+    const x = cx - 20, y = cy - 21;
     ctx.fillStyle = '#8a5a2b'; ctx.fillRect(x + 6, y + 14, 28, 20); ctx.fillStyle = '#5c3a1c'; ctx.fillRect(x + 6, y + 32, 28, 2);
     ctx.fillStyle = '#140c1c'; for (let i = 0; i < 4; i++) ctx.fillRect(x + 9, y + 17 + i * 4, 12, 2);
     ctx.fillStyle = '#ffd23f'; ctx.fillRect(x + 25, y + 18, 5, 5); pline(ctx, x + 28, y + 14, x + 34, y + 5, '#9a94a8');
@@ -3440,8 +3505,13 @@ function drawPortrait(who, x, y) {
   if (!f) return;
   const img = f();
   const sh = Math.min(img.height, 18), sw = img.width;
-  const scale = 2;
-  ctx.drawImage(img, 0, 0, sw, sh, Math.round(x + 20 - (sw * scale) / 2), y + 41 - sh * scale, sw * scale, sh * scale);
+  // Scale to fit inside the diamond rather than a flat 2x: the standard
+  // 13-wide humanoid busts want 2x, but the wider full-body BIG boss
+  // portraits (duke, stinger, pete, kidnap) would blow past the frame at
+  // a fixed scale. Bounding on the larger of width/height (not just width)
+  // keeps a tall crop from overflowing top/bottom too.
+  const scale = Math.min(2, ((r - 4) * 1.4) / Math.max(sw, sh));
+  ctx.drawImage(img, 0, 0, sw, sh, Math.round(cx - (sw * scale) / 2), Math.round(cy + r - 4 - sh * scale), sw * scale, sh * scale);
 }
 function drawEpilogueBg(t) {
   drawBackground('day', t, t);
@@ -3456,24 +3526,32 @@ function drawStory() {
   ctx.fillStyle = 'rgba(8,4,16,0.3)'; ctx.fillRect(0, 0, W, H);
   const [who, text] = scene.lines[scene.i];
   const [name, col] = CAST[who] || ['', '#f4ecd8'];
-  const bx = 6, by = 6, bw = W - 12, bh = 55;
-  ctx.fillStyle = '#140c1c'; ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
-  ctx.fillStyle = '#211430'; ctx.fillRect(bx, by, bw, bh);
-  ctx.fillStyle = '#f08a24'; ctx.fillRect(bx, by, bw, 1); ctx.fillRect(bx, by + bh - 1, bw, 1);
   const hasP = !!PORTRAIT[who] || who === 'radio';
-  if (hasP) drawPortrait(who, bx + 5, by + 6);
-  const tx = bx + (hasP ? 52 : 10), tw = bw - (hasP ? 60 : 20);
-  let ty = by + 6;
-  if (name) { drawText(name, tx, ty, col); ty += 11; }
+  // A parchment-and-wood dialogue box: a tag-shaped name plate overlapping
+  // its top-left corner, and a diamond portrait frame overlapping its
+  // right edge — a pixel-art take on a visual-novel dialogue box.
+  const pr = 22, by = 14, bh = 50, bx = 6;
+  const bw = W - 12 - (hasP ? Math.round(pr * 0.9) : 0);
+  const pcx = bx + bw - 4, pcy = by + bh / 2;
+  pixelPanel(bx, by, bw, bh, '#f4e4c4', '#5c3a1c');
+  ctx.fillStyle = '#c9a877'; ctx.fillRect(bx + 3, by + 3, bw - 6, 1);
+  if (hasP) drawPortrait(who, pcx, pcy, pr);
+  const tx = bx + 8, tw = (hasP ? pcx - pr - tx - 6 : bw - 16);
+  let ty = by + (name ? 15 : 9);
+  if (name) {
+    const tagW = textWidth(name) + 10, tagH = 11, tagX = bx + 4, tagY = by - 8;
+    pixelPanel(tagX, tagY, tagW, tagH, '#5c3a1c', '#2e1c10', 1);
+    drawText(name, tagX + 5, tagY + 2, col);
+  }
   const lines = wrapText(text, tw);
   let left = Math.floor(scene.chars);
   for (const ln of lines) {
     if (left <= 0) break;
-    drawText(ln.slice(0, left), tx, ty, who === 'narrator' ? '#c8c0e0' : '#f4ecd8');
+    drawText(ln.slice(0, left), tx, ty, who === 'narrator' ? '#7e5a2e' : '#3a2410');
     left -= ln.length + 1; ty += 9;
   }
-  if (scene.chars >= text.length && Math.floor(scene.t * 3) % 2) drawText('↓', bx + bw - 10, by + bh - 10, '#f08a24');
-  drawText((scene.i + 1) + '/' + scene.lines.length + (Input.isTouch() ? '' : '   ESC SKIPS'), W - 8, by + bh + 5, '#9a94a8', { align: 'right', outline: '#140c1c' });
+  if (scene.chars >= text.length && Math.floor(scene.t * 3) % 2) drawText('→', bx + bw - 13, by + bh - 11, '#5c3a1c');
+  drawText((scene.i + 1) + '/' + scene.lines.length + (Input.isTouch() ? '' : '   ESC SKIPS'), W - 8, by + bh + 6, '#9a94a8', { align: 'right', outline: '#140c1c' });
 }
 
 // ============================================================
