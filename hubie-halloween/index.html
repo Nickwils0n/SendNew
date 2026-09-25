@@ -134,6 +134,9 @@
 // CORE: canvas, math helpers, bitmap font
 // ============================================================
 const W = 320, H = 180, GROUND = 152;
+// Boss arenas are wider than one screen so there's real room to dodge in;
+// the camera pans within the locked arena instead of pinning to its left edge.
+const ARENA_W = 450;
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
@@ -1796,7 +1799,7 @@ const CHUNKS = (() => {
     },
     door: (L, x) => { L.darkX = x + 60; L.props.push({ kind: 'door', x: x + 30 }); return 140; },
     goal: (L, x) => { L.goalX = x + 80; L.props.push({ kind: 'goal', x: x + 60, label: L.def.goal }); return 200; },
-    arena: (L, x) => { L.arenaX = x + 20; return W + 40; },
+    arena: (L, x) => { L.arenaX = x + 20; return ARENA_W + 40; },
   };
   return C;
 })();
@@ -2804,7 +2807,7 @@ function freeVictim(v, silent) {
 }
 function bossThrowEgg(e, kind = 'egg', spread = 0) {
   const T = 0.75;
-  throwAt(kind, e.x + e.w / 2, e.y + 6, P.x + P.vx * 0.4 + spread, P.y - 12, T, 380);
+  throwAt(kind, e.x + e.w / 2, e.y + 6, predictedAim() + spread, P.y - 12, T, 380);
 }
 // ---- boss phases: the angry/furious HP thresholds already reshape every
 // boss's attack pattern below; this just gives that escalation a name, a
@@ -2819,17 +2822,25 @@ function onBossPhaseChange(e) {
 }
 const ARENA_DANGER_CD = [null, 3.4, 2.2, 1.3]; // indexed by e.phase (1/2/3)
 function spawnArenaDanger(e) {
-  const ax = L.arenaX;
+  const ax = L.arenaX, aw = L.arenaW || ARENA_W;
   const kind = isDavey() ? 'snowball' : 'egg';
-  L.eshots.push({ kind, x: rand(ax + 20, ax + W - 20), y: -10, vx: rand(-20, 20), vy: rand(140, 190), grav: 260, w: 5, h: 5, life: 4, t: 0 });
+  L.eshots.push({ kind, x: rand(ax + 20, ax + aw - 20), y: -10, vx: rand(-20, 20), vy: rand(140, 190), grav: 260, w: 5, h: 5, life: 4, t: 0 });
   Sound.play('throw');
+}
+// A boss's thrown shots used to aim dead-on at the player's predicted
+// position (P.x + P.vx * lead), which reads as unavoidable "pinpoint"
+// aim since anyone moving at a steady speed walks straight into it.
+// Softening the lead and adding scatter keeps it a real threat without
+// punishing normal movement.
+function predictedAim(lead = 0.28, scatter = 14) {
+  return P.x + P.vx * lead + rand(-scatter, scatter);
 }
 function updateBoss(e, dt) {
   e.flash = Math.max(0, e.flash - dt); e.inv = Math.max(0, e.inv - dt); e.stompCd = Math.max(0, e.stompCd - dt);
   if (e.down) { e.t += dt; if ((e.kind === 'wagon' || e.kind === 'grabinski') && Math.random() < 0.3) FX.parts.push({ x: e.x + 60, y: e.y + 8, vx: rand(-10, 10), vy: -30, life: 0.9, color: '#4a4658', size: 2, grav: -10 }); return; }
   if (e.stun > 0) { e.stun = Math.min(e.stun, 1.0) - dt; return; }
   e.t += dt; e.st += dt; e.anim += dt; e.cd -= dt;
-  const ax = L.arenaX, dx = P.x - (e.x + e.w / 2);
+  const ax = L.arenaX, aw = L.arenaW || ARENA_W, dx = P.x - (e.x + e.w / 2);
   const angry = e.hp < e.maxHp * 0.5, furious = e.hp < e.maxHp * 0.3;
   const phase = furious ? 3 : angry ? 2 : 1;
   if (phase > e.phase) { e.phase = phase; onBossPhaseChange(e); }
@@ -2841,11 +2852,11 @@ function updateBoss(e, dt) {
       const d = e.targetX - (e.x + e.w / 2);
       e.vx = sign(d) * (angry ? 128 : 100); e.face = sign(d) || e.face;
       if (Math.abs(d) < 8) {
-        e.targetX = e.targetX < ax + W / 2 ? ax + W - 34 : ax + 34;
+        e.targetX = e.targetX < ax + aw / 2 ? ax + aw - 34 : ax + 34;
         e.state = 'barrage'; e.st = 0; e.vx = 0; e.b1 = e.b2 = false;
       }
       if (e.onGround && Math.random() < dt * 0.7) e.vy = -250;
-      if (e.cd <= 0) { bossThrowEgg(e); e.cd = angry ? 0.75 : 1.15; }
+      if (e.cd <= 0) { bossThrowEgg(e); e.cd = angry ? 0.9 : 1.3; }
     } else {
       e.face = sign(dx) || -1;
       if (e.st > 0.35 && !e.b1) { e.b1 = true; for (const s of [-40, 0, 40]) bossThrowEgg(e, 'egg', s); }
@@ -2854,11 +2865,11 @@ function updateBoss(e, dt) {
     }
     e.vy += 900 * dt; e.y += e.vy * dt; e.x += e.vx * dt;
     if (e.y + e.h >= GROUND) { e.y = GROUND - e.h; e.vy = 0; e.onGround = true; } else e.onGround = false;
-    e.x = clamp(e.x, ax + 4, ax + W - e.w - 4);
+    e.x = clamp(e.x, ax + 4, ax + aw - e.w - 4);
   } else if (e.kind === 'wagon') {
-    if (e.state === 'enter') { e.x -= 120 * dt; if (e.x <= ax + W - 96) { e.state = 'throw'; e.st = 0; e.cd = 0.4; } }
+    if (e.state === 'enter') { e.x -= 120 * dt; if (e.x <= ax + aw - 96) { e.state = 'throw'; e.st = 0; e.cd = 0.4; } }
     else if (e.state === 'throw') {
-      if (e.cd <= 0) { throwAt(Math.random() < 0.55 ? 'tp' : 'egg', e.x + 26, e.y + 2, P.x + P.vx * 0.4, P.y - 12, 0.85, 380); e.cd = angry ? 0.5 : 0.75; }
+      if (e.cd <= 0) { throwAt(Math.random() < 0.55 ? 'tp' : 'egg', e.x + 26, e.y + 2, predictedAim(), P.y - 12, 0.85, 380); e.cd = angry ? 0.5 : 0.75; }
       if (e.st > (angry ? 2.2 : 3.0)) { e.state = 'honk'; e.st = 0; Sound.play('siren'); FX.text(e.x + 20, e.y - 10, 'HONK HONK!', '#ffd23f'); }
     } else if (e.state === 'honk') {
       e.x += Math.sin(e.st * 60) * 0.5;
@@ -2870,7 +2881,7 @@ function updateBoss(e, dt) {
     } else if (e.state === 'reverse') {
       e.x += 75 * dt;
       if (e.cd <= 0 && angry) { throwAt('egg', e.x + 26, e.y + 2, P.x, P.y - 12, 0.7, 380); e.cd = 0.9; }
-      if (e.x >= ax + W - 96) { e.state = 'throw'; e.st = 0; }
+      if (e.x >= ax + aw - 96) { e.state = 'throw'; e.st = 0; }
     }
     if (angry && Math.random() < 0.2) FX.parts.push({ x: e.x + 8, y: e.y + 6, vx: rand(-10, 10), vy: -25, life: 0.8, color: '#6b6b7b', size: 2, grav: -10 });
   } else if (e.kind === 'pete') {
@@ -2890,7 +2901,7 @@ function updateBoss(e, dt) {
       if (e.st < dt * 1.5) { FX.text(e.x + 9, e.y - 8, 'RAAAWR!', '#8fd36a'); Sound.play('gasp'); for (let i = 0; i < 2; i++) { const b = makeEnemy('bat', e.x + (i ? 20 : -10), e.y - 10, { active: true, life: 10 }); b.vx = rand(-40, 40); L.enemies.push(b); } }
       if (e.st > 0.9) { e.state = 'walk'; e.st = 0; }
     }
-    e.x = clamp(e.x, ax + 4, ax + W - e.w - 4);
+    e.x = clamp(e.x, ax + 4, ax + aw - e.w - 4);
   } else if (e.kind === 'kidnapper') {
     if (e.state === 'intro') { e.state = 'throw'; e.st = 0; e.n = 0; }
     if (e.state === 'throw') {
@@ -2902,7 +2913,7 @@ function updateBoss(e, dt) {
       }
       if (e.st > 1.8) { e.state = angry && Math.random() < 0.45 ? 'crows' : furious && Math.random() < 0.5 ? 'dash' : 'hop'; e.st = 0; }
     } else if (e.state === 'hop') {
-      if (e.st < dt * 1.5) { const tx = clamp(P.x + rand(-80, 80), ax + 20, ax + W - 30); e.vy = -300; e.vx = (tx - e.x) / 0.66; }
+      if (e.st < dt * 1.5) { const tx = clamp(P.x + rand(-80, 80), ax + 20, ax + aw - 30); e.vy = -300; e.vx = (tx - e.x) / 0.66; }
       e.vy += 900 * dt; e.y += e.vy * dt; e.x += e.vx * dt;
       if (e.y + e.h >= GROUND && e.vy > 0) { e.y = GROUND - e.h; e.vy = 0; e.state = 'throw'; e.st = 0; e.n = 0; e.cd = 0.3; Sound.play('land'); }
     } else if (e.state === 'crows') {
@@ -2911,16 +2922,16 @@ function updateBoss(e, dt) {
     } else if (e.state === 'dash') {
       if (e.st < dt * 1.5) { e.face = sign(dx) || -1; FX.text(e.x + 9, e.y - 8, '!!!', '#ff6a1f'); }
       if (e.st > 0.4) e.x += e.face * 200 * dt;
-      if (e.x <= ax + 6 || e.x >= ax + W - e.w - 6 || e.st > 2.2) { e.state = 'throw'; e.st = 0; e.n = 0; }
+      if (e.x <= ax + 6 || e.x >= ax + aw - e.w - 6 || e.st > 2.2) { e.state = 'throw'; e.st = 0; e.n = 0; }
     }
-    e.x = clamp(e.x, ax + 4, ax + W - e.w - 4);
+    e.x = clamp(e.x, ax + 4, ax + aw - e.w - 4);
     if (Math.random() < 0.6) FX.parts.push({ x: e.x + (e.face > 0 ? e.w + 2 : -2), y: e.y + 12, vx: rand(-8, 8), vy: -35, life: 0.35, color: choose(['#ff6a1f', '#ffd23f']), size: 1, grav: -20 });
   } else if (e.kind === 'duke' || e.kind === 'duke2') {
     if (e.state === 'intro') { e.state = 'skate'; e.targetX = ax + 40; }
     if (e.state === 'skate') {
       const d = e.targetX - (e.x + e.w / 2);
       e.vx = sign(d) * (angry ? 130 : 95); e.face = sign(d) || e.face;
-      if (Math.abs(d) < 8) { e.targetX = e.targetX < ax + W / 2 ? ax + W - 30 : ax + 30; e.state = 'throw'; e.st = 0; e.b1 = false; e.b2 = false; e.vx = 0; }
+      if (Math.abs(d) < 8) { e.targetX = e.targetX < ax + aw / 2 ? ax + aw - 30 : ax + 30; e.state = 'throw'; e.st = 0; e.b1 = false; e.b2 = false; e.vx = 0; }
       if (e.cd <= 0) { bossThrowEgg(e); e.cd = angry ? 0.7 : 1.05; }
       e.x += e.vx * dt;
       for (let i = 0; i < 2; i++) if (Math.random() < 0.4) FX.parts.push({ x: e.x + e.w / 2, y: GROUND - 1, vx: rand(-6, 6), vy: -12, life: 0.35, color: '#cfe8ff', size: 1, grav: 10 });
@@ -2934,11 +2945,11 @@ function updateBoss(e, dt) {
       if (Math.random() < 0.5) FX.parts.push({ x: e.x + e.w / 2, y: GROUND - 2, vx: rand(-10, 10), vy: -14, life: 0.4, color: '#cfe8ff', size: 1, grav: 10 });
       if (e.st > 0.6) { e.state = 'skate'; e.st = 0; }
     }
-    e.x = clamp(e.x, ax + 4, ax + W - e.w - 4);
+    e.x = clamp(e.x, ax + 4, ax + aw - e.w - 4);
   } else if (e.kind === 'grabinski') {
-    if (e.state === 'enter') { e.x -= 140 * dt; if (e.x <= ax + W - 96) { e.state = 'throw'; e.st = 0; e.cd = 0.4; } }
+    if (e.state === 'enter') { e.x -= 140 * dt; if (e.x <= ax + aw - 96) { e.state = 'throw'; e.st = 0; e.cd = 0.4; } }
     else if (e.state === 'throw') {
-      if (e.cd <= 0) { throwAt('egg', e.x + 26, e.y + 2, P.x + P.vx * 0.4, P.y - 12, 0.85, 380); e.cd = angry ? 0.5 : 0.8; }
+      if (e.cd <= 0) { throwAt('egg', e.x + 26, e.y + 2, predictedAim(), P.y - 12, 0.85, 380); e.cd = angry ? 0.5 : 0.8; }
       if (e.st > (angry ? 2.0 : 2.8)) { e.state = 'siren'; e.st = 0; Sound.play('siren'); FX.text(e.x + 20, e.y - 10, 'PULL OVER!', '#ff3b3b'); }
     } else if (e.state === 'siren') {
       e.x += Math.sin(e.st * 60) * 0.5;
@@ -2950,7 +2961,7 @@ function updateBoss(e, dt) {
     } else if (e.state === 'reverse') {
       e.x += 80 * dt;
       if (e.cd <= 0 && angry) { throwAt('egg', e.x + 26, e.y + 2, P.x, P.y - 12, 0.7, 380); e.cd = 0.9; }
-      if (e.x >= ax + W - 96) { e.state = 'throw'; e.st = 0; }
+      if (e.x >= ax + aw - 96) { e.state = 'throw'; e.st = 0; }
     }
   } else if (e.kind === 'stinger') {
     if (e.state === 'intro' || e.state === 'walk') {
@@ -2968,7 +2979,7 @@ function updateBoss(e, dt) {
       }
       if (e.st > 0.9) { e.state = 'walk'; e.st = 0; }
     }
-    e.x = clamp(e.x, ax + 4, ax + W - e.w - 4);
+    e.x = clamp(e.x, ax + 4, ax + aw - e.w - 4);
   }
   // contact with Hubie: stomp from above or get hurt
   if (!P.dead && overlap(pbox(P), e)) {
@@ -3222,10 +3233,17 @@ function completeLevel() {
   setState('complete');
 }
 function updateCamera() {
-  if (L.lockL != null) { L.camX = lerp(L.camX, L.lockL, 0.12); if (Math.abs(L.camX - L.lockL) < 0.5) L.camX = L.lockL; return; }
   // Fixed side-scroller framing: Hubie stays at a constant point on screen
   // regardless of which way he's facing, instead of the camera re-centering
-  // (and panning the whole background) every time he turns around.
+  // (and panning the whole background) every time he turns around. A locked
+  // boss arena is wider than one screen, so the camera still follows within
+  // it (clamped to the arena) rather than pinning to its left edge — that's
+  // what actually gives the player room to move during the fight.
+  if (L.lockL != null) {
+    const target = clamp(P.x - 110, L.lockL, Math.max(L.lockL, L.lockR - W));
+    L.camX = lerp(L.camX, target, 0.14);
+    return;
+  }
   const target = clamp(P.x - 110, 0, L.len - W);
   L.camX = lerp(L.camX, target, 0.14);
 }
@@ -3279,11 +3297,12 @@ function updatePlay(dt) {
   // boss arena
   if (L.arenaX != null && L.bossPhase === 'none' && P.x >= L.arenaX + 50 && !P.dead) {
     L.bossPhase = 'intro'; L.bossIntroT = 0;
-    L.lockL = L.arenaX; L.lockR = L.arenaX + W;
-    L.enemies = L.enemies.filter((e) => e.x > L.arenaX - 10 && e.x < L.arenaX + W);
+    L.arenaW = ARENA_W;
+    L.lockL = L.arenaX; L.lockR = L.arenaX + L.arenaW;
+    L.enemies = L.enemies.filter((e) => e.x > L.arenaX - 10 && e.x < L.arenaX + L.arenaW);
     if (L.def.boss === 'kidnapper') setupVictims();
     const b = spawnBoss(L.def.boss);
-    if (b.kind === 'wagon') { b.x = L.arenaX + W - 96; b.state = 'throw'; b.st = 0; }
+    if (b.kind === 'wagon') { b.x = L.arenaX + L.arenaW - 96; b.state = 'throw'; b.st = 0; }
     Sound.playMusic('boss');
   }
   if (L.bossPhase === 'intro') {
