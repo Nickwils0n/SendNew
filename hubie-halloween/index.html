@@ -617,6 +617,13 @@ const TOPS = {
     '..uuuuuuuu..', '.uuuuuuuuuu.', '.uuuuuuuuuu.', '.uuuuuuuuuu.', '.suuuuuuuu..', '..GGGGGGGG..', '..GGGGGGGG..', '..GGGGGGGG..'],
   elf: ['....yyyyy...', '...yyyyyyy..', '..yysssssy..', '..ysssksss..', '..yssssssss.', '...sssSSs...', '....ssss....',
     '..eeeeeeee..', '.eeeeeeeeee.', '.eeeerreeee.', '.eeeeeeeeee.', '.seeeeeeee..', '..EEEEEEEE..', '..EEEEEEEE..', '..EEEEEEEE..'],
+  // The Hennesseys get their own portraits — matching the movie's actual
+  // casting — rather than sharing the generic man/woman templates also
+  // used by the mayor and Grabinski.
+  hennessey: ['...kkkkk....', '..kkkkkkk...', '..kkTTTTT...', '..kTTTTkTT..', '..kTTTTTTTT.', '...BkkkkT...', '....TTTT....',
+    '..uuuuuuuu..', '.uuuuuuuuuT.', '.uuuuuuuuu..', '.uuuuuuuuu..', '.Tuuuuuuuu..', '..GGGGGGGG..', '..GGGGGGGG..', '..GGGGGGGG..'],
+  mrshennessey: ['...kkkkk....', '..kkkkkkkk..', '..kkTTTTT...', '..kkTTkTTT..', '..kkTTTTTT..', '..kkTTmmT...', '..kk.TTT....',
+    '..mmmmmmmm..', '.mmmmmmmmmm.', '.mmmmmmmmmT.', '.mmmmmmmm...', '.Tmmmmmmmm..', '..PPPPPPPP..', '..PPPPPPPP..', '..PPPPPPPP..'],
 };
 const S = {};
 S.ghost = humanoid(TOPS.ghost, 'x', 'r');
@@ -634,6 +641,8 @@ S.mom = humanoid(TOPS.mom, 'p', 'w');
 S.kid = humanoid(TOPS.kid, 'u', 'w');
 S.man = humanoid(TOPS.man, 'G', 'k');
 S.woman = humanoid(TOPS.woman, 'm', 'k');
+S.hennessey = humanoid(TOPS.hennessey, 'G', 'k');
+S.mrshennessey = humanoid(TOPS.mrshennessey, 'P', 'k');
 S.whitey = humanoid(TOPS.whitey, 'H', 'B');
 S.davey = humanoid(TOPS.davey, 'G', 'k');
 S.elf = humanoid(TOPS.elf, 'u', 'B');
@@ -679,6 +688,8 @@ const SMALL = {
   basketball: ['.oOo.', 'OkOkO', 'kOOOk', 'OkOkO', '.oOo.'],
   puckshot: ['.kk.', 'kkkk', '.kk.'],
   snowball: ['.WW.', 'WWiW', 'WWWW', '.WW.'],
+  present: ['.y.y.', '.yYy.', 'rrYrr', 'rrYrr', 'RrYrR', 'RRYRR'],
+  giftsack: ['...kk.....', '..kkkkk...', '.eeeeeee..', 'eeEeeeEee.', 'eeeeyeeee.', 'eEeeeeeEe.', 'eeeyeyeee.', '.eeeeeee..', '..eEeeE...', '...eee....'],
 };
 const SM = {};
 for (const k in SMALL) SM[k] = spr(SMALL[k]);
@@ -882,8 +893,8 @@ S.witch = [spr(WITCH_ROWS), spr(WITCH_ROWS.slice(0, 13).concat(['ttt...pp.pp....
 const PORTRAIT = {
   hubie: () => R.hubie, violet: () => R.violet, mom: () => S.mom[0], downey: () => S.downey[0], walter: () => S.walter[0],
   richie: () => S.richie[0], buster: () => S.buster[0], mike: () => R.skeleton, pete: () => BG_SPR.pete,
-  kidnapper: () => BG_SPR.kidnap, momreveal: () => BG_SPR.momreveal, radio: null, hennessey: () => S.man[0],
-  mrshennessey: () => S.woman[0], mayor: () => S.man[0], narrator: null,
+  kidnapper: () => BG_SPR.kidnap, momreveal: () => BG_SPR.momreveal, radio: null, hennessey: () => S.hennessey[0],
+  mrshennessey: () => S.mrshennessey[0], mayor: () => S.man[0], narrator: null,
   whitey: () => S.whitey[0], davey: () => S.davey[0], duke: () => BG_SPR.duke, grabinski: () => S.man[0], stinger: () => BG_SPR.stinger,
 };
 
@@ -984,6 +995,36 @@ function drawTree(g, x, base, rng, style) {
       g.fillRect(Math.floor(x + 1 + Math.cos(a) * d * 1.2), Math.floor(base - h + 2 + Math.sin(a) * d * 0.8), 3, 3);
     }
   }
+}
+// A layered pine with a star and colored-light dots — same "stacked
+// stair-step rows" technique as drawHouse's gable roof, just tapering
+// across three tiers instead of one peak.
+function drawXmasTree(g, x, base, h, rng) {
+  const r = rng || Math.random;
+  g.fillStyle = '#4a2f18'; g.fillRect(x - 2, base - 6, 4, 6);
+  const halfW = Math.round(h * 0.34);
+  let ty = base - 6;
+  for (let t = 0; t < 3; t++) {
+    const th = Math.round((h / 3) * (t === 0 ? 1.15 : 1));
+    const tw = Math.max(2, Math.round(halfW * (1 - t * 0.22)));
+    for (let i = 0; i < th; i++) {
+      const rowW = Math.max(1, Math.round((tw * i) / th));
+      g.fillStyle = '#2d5a2a';
+      g.fillRect(x - rowW, ty - i, rowW * 2 + 1, 1);
+    }
+    ty -= th - 3;
+  }
+  const cols = ['#d83a3a', '#ffd23f', '#7f9fec', '#e0609a'];
+  const treeTop = ty, treeH = base - 6 - treeTop;
+  for (let i = 0; i < 16; i++) {
+    const rr = r();
+    const dy = Math.floor(rr * treeH);
+    const rowMaxW = Math.max(1, Math.round(halfW * (dy / (treeH || 1))));
+    g.fillStyle = cols[Math.floor(rr * 997) % cols.length];
+    g.fillRect(x - rowMaxW + Math.floor(r() * (rowMaxW * 2 + 1)), base - 6 - dy, 1, 1);
+  }
+  g.fillStyle = '#ffd23f';
+  g.fillRect(x - 1, treeTop - 4, 3, 1); g.fillRect(x, treeTop - 6, 1, 3);
 }
 function buildTheme(name) {
   if (bgCache[name]) return bgCache[name];
@@ -1088,22 +1129,26 @@ function buildTheme(name) {
     }
     mg.fillStyle = '#1a0a10'; mg.fillRect(0, 128, 640, 22);
   } else if (T.mid === 'wintertown') {
-    // Dukesberry: a rec-center block flanked by snow-capped houses
+    // Dukesberry: a Christmas village — a rec-center block and a town-square
+    // tree flanked by snow-capped, string-lit houses.
     mg.fillStyle = '#0d1830'; mg.fillRect(220, 44, 150, 102);
     mg.fillStyle = '#e8f2ff'; mg.fillRect(220, 42, 150, 4);
     mg.fillStyle = '#8fd3ff'; for (let i = 0; i < 8; i++) mg.fillRect(232 + i * 17, 58, 10, 26);
     mg.fillStyle = '#d83a3a'; mg.fillRect(270, 100, 62, 16);
     mg.fillStyle = '#ffd23f'; for (let i = 0; i < 5; i++) mg.fillRect(278 + i * 11, 105, 6, 6);
+    drawXmasTree(mg, 200, base, 60, rng);
+    drawXmasTree(mg, 585, base, 44, rng);
     let hx = 4;
     while (hx < 640) {
-      if (hx > 200 && hx < 390) { hx = 390; continue; }
+      if (hx > 195 && hx < 390) { hx = 390; continue; }
       const w = drawHouse(mg, hx, base, rng, true);
       mg.fillStyle = '#e8f2ff'; mg.fillRect(hx - 1, base - (34 + Math.floor(rng() * 12)), w + 2, 3);
       hx += w + 10;
+      if (rng() < 0.5) drawXmasTree(mg, hx + 6, base, 24 + Math.floor(rng() * 16), rng);
       hx += 10 + Math.floor(rng() * 20);
     }
-    mg.fillStyle = '#cfe8ff';
-    for (let ix = 6; ix < 640; ix += 22) { const len = 3 + Math.floor(rng() * 7); mg.fillRect(ix, base - 1, 2, len); }
+    const lightCols = ['#d83a3a', '#ffd23f', '#3fbcbc', '#e0609a'];
+    for (let ix = 6, i = 0; ix < 640; ix += 22, i++) { mg.fillStyle = lightCols[i % lightCols.length]; mg.fillRect(ix, base - 1, 2, 3); }
   } else if (T.mid === 'court') {
     mg.fillStyle = '#2a1e12'; mg.fillRect(0, 0, 640, 150);
     for (let bx = 0; bx < 640; bx += 90) {
@@ -1111,6 +1156,7 @@ function buildTheme(name) {
       for (let r = 0; r < 6; r++) { mg.fillStyle = r % 2 ? '#6a4a2a' : '#7e5a2e'; mg.fillRect(bx, base - 74 + r * 12, 74, 10); }
       mg.fillStyle = '#d83a3a'; mg.fillRect(bx + 18, base - 96, 34, 16);
       mg.fillStyle = '#ffd23f'; for (let i = 0; i < 4; i++) mg.fillRect(bx + 24 + i * 7, base - 92, 4, 6);
+      drawXmasTree(mg, bx + 82, base, 40, rng);
     }
   } else if (T.mid === 'hall') {
     mg.fillStyle = '#241830'; mg.fillRect(0, 0, 640, 150);
@@ -1122,6 +1168,7 @@ function buildTheme(name) {
       for (let c = 0; c < 9; c++) mg.fillRect(px2 + 60 + Math.floor(c / 3) * 8, 90 - (c % 3) * 10, 2, 8);
     }
     mg.fillStyle = '#1a0f24'; mg.fillRect(0, 128, 640, 22);
+    for (let tx = 100; tx < 640; tx += 260) drawXmasTree(mg, tx, base, 46, rng);
   }
   const out = { sky, far, mid, T };
   bgCache[name] = out;
@@ -1281,6 +1328,26 @@ const UPGRADES = [
   { id: 'flashlight', name: 'FLASHLIGHT', desc: 'SEE FARTHER IN THE HAUNTED HOUSE.', costs: [20, 45] },
   { id: 'smoothie', name: 'BLENDER SMOOTHIE', desc: 'REFILL ALL YOUR HEARTS.', costs: [10], consumable: true },
 ];
+// Davey has his own pro shop, not Hubie's thermos workbench — same ids,
+// costs and engine effects (so no new upgrade logic is needed anywhere
+// else), just reskinned names/descriptions for what's actually on him.
+// Flashlight is dropped: chapter 2 has no dark sections for it to help with.
+const DAVEY_UPGRADE_TEXT = {
+  soup: { name: 'COLD SNAP', desc: 'PACK YOUR SNOWBALLS HARDER.' },
+  rapid: { name: 'QUICK HANDS', desc: 'THROW FASTER.' },
+  spread: { name: 'DOUBLE PACK', desc: 'THROW 2 SNOWBALLS, THEN 3.' },
+  flare: { name: 'ICE SHARD', desc: 'EVERY FEW THROWS IS AN EXPLODING SHARD.' },
+  drill: { name: 'PACKED HARD', desc: 'SNOWBALLS PIERCE FOES AND SMASH JUNK.' },
+  umbrella: { name: 'COZY EARMUFFS', desc: 'BLOCKS A HIT. RECHARGES.' },
+  grapple: { name: 'RAZOR EDGES', desc: 'JUMP A SECOND TIME IN MID-AIR.' },
+  vacuum: { name: 'MAGNET MITTENS', desc: 'SUCKS IN NEARBY PRESENTS.' },
+  inhaler: { name: 'WINTER COAT', desc: '+1 MAX HEART.' },
+  megaphone: { name: 'LUCKY MITTENS', desc: 'STREAK CHARGES FASTER AND HITS HARDER.' },
+  smoothie: { name: 'HOT COCOA', desc: 'REFILL ALL YOUR HEARTS.' },
+};
+const shopUpgrades = () => isDavey() ? UPGRADES.filter((u) => u.id !== 'flashlight') : UPGRADES;
+const upgName = (u) => (isDavey() && DAVEY_UPGRADE_TEXT[u.id] ? DAVEY_UPGRADE_TEXT[u.id].name : u.name);
+const upgDesc = (u) => (isDavey() && DAVEY_UPGRADE_TEXT[u.id] ? DAVEY_UPGRADE_TEXT[u.id].desc : u.desc);
 
 const PALS = {
   violet: { name: 'VIOLET', color: '#ecd27a', power: 'LOBS CANDY APPLES', line: "I'VE GOT YOUR BACK, HUBIE!" },
@@ -1432,8 +1499,8 @@ const LEVELS = [
     ],
   },
   {
-    title: 'THROUGH THE RIFT', place: 'DUKESBERRY TOWN POND', theme: 'rink', music: 'main', boss: 'duke', icy: true,
-    plan: ['open', 'elves', 'pucks', 'cars', 'ramp', 'runners', 'crates', 'pucks', 'check',
+    title: 'THROUGH THE RIFT', place: 'DUKESBERRY TOWN POND', theme: 'rink', music: 'main', boss: 'duke', icy: true, pal: 'whitey',
+    plan: ['open', 'pal', 'elves', 'pucks', 'cars', 'ramp', 'runners', 'crates', 'pucks', 'check',
       'elves', 'ramp', 'trash', 'pucks', 'sandwich', 'bigair', 'cars', 'elves', 'barriers', 'arena'],
     intro: [
       ["narrator", "SALEM'S TOWN SQUARE. THE CROWD IS STILL CHEERING WHEN THE SKY ITSELF SPLITS OPEN."],
@@ -1448,6 +1515,11 @@ const LEVELS = [
       ['whitey', "DAVEY? DAVEY STONE? THOUGHT YOU SKIPPED TOWN AGAIN."],
       ['davey', "I— YEAH. DAVEY. THAT'S ME. TOTALLY DIDN'T JUST FALL OUT OF A HOLE IN THE SKY."],
       ['whitey', "SURE. I'M WHITEY DUVALL, IN CASE FALLING OUT OF THE SKY RATTLED THAT LOOSE TOO. AND THAT GUY SKATING AT US? STILL NOT FRIENDLY."],
+    ],
+    palIntro: [
+      ['whitey', "MIGHT AS WELL SKATE WITH YOU. SOMEBODY'S GOT TO EXPLAIN THIS TOWN BEFORE YOU EMBARRASS US BOTH."],
+      ['davey', 'GREAT. A GUIDE. DOES THE GUIDE ALSO KNOW THE WAY HOME?'],
+      ['whitey', "NOPE. BUT I KNOW WHERE DUKE HANGS OUT, AND THAT'S A START."],
     ],
     bossIntro: [
       ['duke', "STONE. SHOULD'VE KNOWN. NEW GUY FALLS OUT OF THE SKY AND IT'S STILL YOU."],
@@ -1857,7 +1929,7 @@ const courageMult = () => 1 + 0.3 * run.upg.megaphone;
 function addCourage(n) {
   const before = P.courage;
   P.courage = Math.min(100, P.courage + n * courageMult());
-  if (before < 100 && P.courage >= 100) { Sound.play('ready'); FX.text(P.x, P.y - 40, 'HOLLER READY!', '#8fd36a'); }
+  if (before < 100 && P.courage >= 100) { Sound.play('ready'); FX.text(P.x, P.y - 40, isDavey() ? 'STREAK READY!' : 'HOLLER READY!', '#8fd36a'); }
 }
 function addScore(n) { run.score += Math.round(n); }
 function addCandy(n, x, y) {
@@ -2086,9 +2158,18 @@ function updatePlayer(dt) {
   if (Input.down('shoot') && P.shootCd <= 0) {
     const ox = P.x + P.face * 10, oy = P.y - 15;
     if (isDavey()) {
-      P.shootCd = SNOWBALL_CD;
-      L.shots.push({ x: ox, y: oy, vx: 285 * P.face + P.vx * 0.3, vy: 0, dmg: SNOWBALL_DMG, life: 0.85, hit: new Set(), kind: 'snowball' });
-      Sound.play('shoot');
+      P.shootCd = SNOWBALL_CD - run.upg.rapid * 0.06;
+      P.shotN++;
+      const every = run.upg.flare === 1 ? 4 : run.upg.flare >= 2 ? 3 : 0;
+      const flare = every > 0 && P.shotN % every === 0;
+      const dmg = SNOWBALL_DMG + run.upg.soup * 0.5;
+      const angles = run.upg.spread === 0 ? [0] : run.upg.spread === 1 ? [-0.09, 0.09] : [-0.17, 0, 0.17];
+      angles.forEach((a, i) => {
+        const isFlare = flare && i === Math.floor(angles.length / 2);
+        L.shots.push({ x: ox, y: oy, vx: Math.cos(a) * 285 * P.face + P.vx * 0.3, vy: Math.sin(a) * 285, dmg: isFlare ? dmg + 1 : dmg,
+          life: 0.85, flare: isFlare, pierce: run.upg.drill > 0, hit: new Set(), kind: 'snowball' });
+      });
+      Sound.play(flare ? 'flare' : 'shoot');
       P.recoil = 0.08;
       FX.burst(ox, oy, 3, ['#ffffff', '#a8e0ff'], { angle: -Math.PI / 2, spread: 0.5, min: 10, max: 30, grav: -40, life: 0.4 });
     } else {
@@ -2108,18 +2189,20 @@ function updatePlayer(dt) {
       FX.burst(ox, oy, 2, ['#f4ecd8', '#9a94a8'], { angle: -Math.PI / 2, spread: 0.5, min: 10, max: 30, grav: -40, life: 0.4 });
     }
   }
-  // ---- megaphone holler (Hubie's own gadget — Davey doesn't have it)
-  if (Input.hit('holler') && !isDavey()) {
+  // ---- megaphone holler for Hubie, snowball frenzy for Davey — same
+  // full-meter payoff move, reskinned (see doHoller).
+  if (Input.hit('holler')) {
     if (P.courage >= 100) doHoller();
-    else { Sound.play('deny'); FX.text(P.x, P.y - 40, 'NOT BRAVE ENOUGH YET!', '#9a94a8', { life: 0.7 }); }
+    else { Sound.play('deny'); FX.text(P.x, P.y - 40, isDavey() ? 'STREAK NOT READY YET!' : 'NOT BRAVE ENOUGH YET!', '#9a94a8', { life: 0.7 }); }
   }
 }
 
 function doHoller() {
   P.courage = 0; P.hollerT = 0.9;
-  Sound.play('holler'); FX.flash = 0.7; FX.flashColor = '#fff3a0'; FX.shake = 7;
-  FX.text(P.x, P.y - 50, 'HUBIE HOLLER!!', '#ffd23f', { scale: 2, life: 1.2 });
-  L.rings.push({ x: P.x, y: P.y - 16, r: 4, max: 260, color: '#ffd23f', speed: 420 });
+  const davey = isDavey();
+  Sound.play('holler'); FX.flash = 0.7; FX.flashColor = davey ? '#cfe8ff' : '#fff3a0'; FX.shake = 7;
+  FX.text(P.x, P.y - 50, davey ? 'SNOWBALL FRENZY!!' : 'HUBIE HOLLER!!', davey ? '#7f9fec' : '#ffd23f', { scale: 2, life: 1.2 });
+  L.rings.push({ x: P.x, y: P.y - 16, r: 4, max: 260, color: davey ? '#cfe8ff' : '#ffd23f', speed: 420 });
   const dmg = 4 + 2 * run.upg.megaphone;
   for (const e of L.enemies) {
     if (e.dead || !onScreen(e.x, 24)) continue;
@@ -2260,13 +2343,21 @@ function nearestEnemy(x, y, range, filter) {
   }
   return best;
 }
+function palTakeDamage(st, id) {
+  st.hp--; st.hurtCd = 0.6;
+  FX.burst(st.x, st.y - 12, 6, ['#ff6a1f', '#f4ecd8'], { max: 60 });
+  if (st.hp <= 0) {
+    st.downT = 7; st.dash = 0;
+    Sound.play('bail'); FX.text(st.x, st.y - 24, PALS[id].name + ' IS DOWN!', '#ff6a1f', { life: 1.2 });
+  } else Sound.play('hurt');
+}
 function updatePals(dt) {
   if (!L.trail.length || Math.hypot(L.trail[0].x - P.x, L.trail[0].y - P.y) >= 2) {
     L.trail.unshift({ x: P.x, y: P.y, f: P.face });
     if (L.trail.length > 120) L.trail.length = 120;
   }
   run.pals.forEach((id, i) => {
-    const st = L.palState[id] || (L.palState[id] = { cd: 1 + i * 0.4, dx: 0, dash: 0, anim: 0, say: 0, sayText: '' });
+    const st = L.palState[id] || (L.palState[id] = { cd: 1 + i * 0.4, dx: 0, dash: 0, anim: 0, say: 0, sayText: '', hp: 3, downT: 0, hurtCd: 0 });
     const pos = palPos(i);
     if (st.py == null) { st.px = pos.x; st.py = pos.y; st.pvy = 0; }
     st.px = lerp(st.px, pos.x, 0.25);
@@ -2281,6 +2372,20 @@ function updatePals(dt) {
     if (st.grounded && pos.y < st.py - 6) st.pvy = -Math.min(390, Math.sqrt(2 * 900 * (st.py - pos.y + 6)));
     st.x = st.px + st.dx; st.y = st.py; st.f = pos.f;
     st.anim += dt; st.say = Math.max(0, st.say - dt);
+    // ---- pals can get hurt and are briefly out of the fight, same danger
+    // sources that hit the player, just their own hp/recovery track.
+    if (st.hp == null) { st.hp = 3; st.downT = 0; st.hurtCd = 0; }
+    st.hurtCd = Math.max(0, st.hurtCd - dt);
+    if (st.downT > 0) {
+      st.downT = Math.max(0, st.downT - dt); st.dash = 0;
+      if (st.downT === 0) { st.hp = 3; Sound.play('ready'); FX.text(st.x, st.y - 20, PALS[id].name + ' IS BACK UP!', '#8fd36a', { life: 1 }); }
+    } else if (st.hurtCd <= 0 && !P.dead) {
+      const pbx = { x: st.x - 6, y: st.y - 20, w: 12, h: 20 };
+      let danger = L.enemies.some((e) => !e.dead && !e.down && e.active && overlap(pbx, e))
+        || L.eshots.some((s) => !s.dead && overlap(pbx, { x: s.x - s.w / 2, y: s.y - s.h / 2, w: s.w, h: s.h }))
+        || L.hazards.some((hz) => !hz.dead && hz.kind !== 'cone' && hz.kind !== 'manhole' && overlap(pbx, hz));
+      if (danger) palTakeDamage(st, id);
+    }
     st.cd -= dt;
     if (st.dash > 0) {
       st.dash -= dt;
@@ -2290,7 +2395,7 @@ function updatePals(dt) {
         if (Math.abs(e.x + e.w / 2 - st.x) < 12 && e.y + e.h > GROUND - 30) { st.hitSet.add(e); damageEnemy(e, id === 'richie' ? 3 : 2, 'pal'); }
       }
     } else st.dx = lerp(st.dx, 0, 0.08);
-    if (st.cd > 0 || L.cutscene || P.dead) return;
+    if (st.cd > 0 || st.downT > 0 || L.cutscene || P.dead) return;
     const cx = st.x, cy = st.y - 12;
     if (id === 'violet') {
       const e = nearestEnemy(cx, cy, 190);
@@ -2304,6 +2409,12 @@ function updatePals(dt) {
       if (e) {
         L.shots.push({ x: cx + P.face * 6, y: cy - 2, vx: 300 * P.face, vy: 0, dmg: 1, life: 0.8, pierce: true, hit: new Set(), kind: 'ring' });
         Sound.play('whistle'); st.cd = 1.9;
+      } else st.cd = 0.3;
+    } else if (id === 'whitey') {
+      const e = nearestEnemy(cx, cy, 200, (en) => (en.x - cx) * P.face > 0);
+      if (e) {
+        L.shots.push({ x: cx + P.face * 6, y: cy, vx: 340 * P.face, vy: 0, dmg: 1.5, life: 0.7, hit: new Set(), kind: 'puckshot' });
+        Sound.play('throw'); st.say = 0.7; st.sayText = 'SLAPSHOT!'; st.cd = 1.6;
       } else st.cd = 0.3;
     } else if (id === 'walter') {
       const near = nearestEnemy(cx, cy, 110) || L.eshots.find((s) => Math.hypot(s.x - cx, s.y - cy) < 110);
@@ -2330,15 +2441,18 @@ function drawPals() {
     if (!st || st.x == null) return;
     const sx = st.x - L.camX;
     const face = st.dash > 0 ? sign(st.dashV) || 1 : st.f;
+    const down = st.downT > 0;
     if (id === 'violet') {
-      drawRider({ who: 'violet', bike: BIKES.violet, pedal: P.pedal + 1.3, wheelT: P.wheelT + 3, pose: 'ride' }, sx, st.y, face, 0);
+      drawRider({ who: 'violet', bike: BIKES.violet, pedal: P.pedal + 1.3, wheelT: P.wheelT + 3, pose: 'ride' }, sx, st.y, face, down ? (Math.PI / 2) * face : 0, down ? 0.6 : 1);
     } else {
       const frames = S[id];
       const moving = Math.abs(P.vx) > 10 || st.dash > 0;
       const img = frames[moving ? Math.floor(st.anim * 8) % 2 : 0];
-      drawSpr(img, sx - img.width / 2, st.y - img.height, face < 0);
+      if (down) drawSprAt(img, sx, st.y, face < 0, (Math.PI / 2) * face);
+      else drawSpr(img, sx - img.width / 2, st.y - img.height, face < 0);
     }
-    if (st.say > 0) drawBubble(sx, st.y - 30, st.sayText);
+    if (down) { if (Math.floor(L.time * 2) % 2) drawText('zzz', sx, st.y - 10, '#9a94a8', { align: 'center' }); }
+    else if (st.say > 0) drawBubble(sx, st.y - 30, st.sayText);
   });
 }
 function drawBubble(x, y, text) {
@@ -2362,7 +2476,7 @@ function throwAt(kind, x, y, tx, ty, T, grav) {
   Sound.play('throw');
   return s;
 }
-const BOSS_DMG_MULT = { soup: 0.5, flare: 0.85, holler: 0.75, pal: 0.55, stomp: 1 };
+const BOSS_DMG_MULT = { soup: 0.5, snowball: 0.6, flare: 0.85, holler: 0.75, pal: 0.55, stomp: 1 };
 function damageEnemy(e, dmg, src) {
   if (e.dead || e.down || e.hidden || e.inv > 0 || (e.buried && e.rise < 1)) return;
   if (e.boss) dmg *= BOSS_DMG_MULT[src] != null ? BOSS_DMG_MULT[src] : 0.6;
@@ -2546,7 +2660,7 @@ function updateEshots(dt) {
     if (s.kind === 'tp' && Math.random() < 0.5) FX.parts.push({ x: s.x, y: s.y, vx: 0, vy: 0, life: 0.5, color: '#f4ecd8', size: 1, grav: 30 });
     if (s.kind === 'flame' && Math.random() < 0.8) FX.parts.push({ x: s.x + rand(-2, 2), y: s.y, vx: rand(-10, 10), vy: -30, life: 0.3, color: choose(['#ff6a1f', '#ffd23f']), size: 1, grav: -20 });
     if (s.y + s.h / 2 >= GROUND - 1 && !inPit(s.x)) {
-      if (s.kind === 'rollpumpkin') {
+      if (s.kind === 'rollpumpkin' || s.kind === 'basketball') {
         s.y = GROUND - 1 - s.h / 2;
         s.vy = Math.abs(s.vy) > 70 ? -Math.abs(s.vy) * 0.45 : 0;
       } else if (s.kind === 'wave') {
@@ -2563,7 +2677,7 @@ function updateEshots(dt) {
     const box = { x: s.x - s.w / 2, y: s.y - s.h / 2, w: s.w, h: s.h };
     if (!P.dead && overlap(box, pbox(P))) {
       if (s.kind === 'wave' && !P.onGround) continue;
-      if (P.inv <= 0 && P.bailT <= 0) { hurt(1, s.kind === 'egg' ? 'EGGED!' : s.kind === 'tp' ? 'TP\'D!' : s.kind === 'snowball' ? 'SNOWBALLED!' : null); popEshot(s); }
+      if (P.inv <= 0 && P.bailT <= 0) { hurt(1, s.kind === 'egg' ? 'EGGED!' : s.kind === 'tp' ? 'TP\'D!' : s.kind === 'snowball' ? 'SNOWBALLED!' : s.kind === 'puckshot' ? 'SLAPSHOT!' : s.kind === 'basketball' ? 'SLAM DUNKED!' : null); popEshot(s); }
     }
     if (s.x < L.camX - 60 || s.x > L.camX + W + 80 || s.y > H + 20) s.dead = true;
   }
@@ -2572,13 +2686,13 @@ function updateEshots(dt) {
 function drawEshots() {
   for (const s of L.eshots) {
     const sx = Math.round(s.x - L.camX), sy = Math.round(s.y);
-    const img = { egg: SM.egg, tp: SM.tp, potion: SM.potion, rollpumpkin: SM.pumpkinSm, flame: SM.pumpkinSm, gas: SM.gas, snowball: SM.snowball }[s.kind];
+    const img = { egg: SM.egg, tp: SM.tp, potion: SM.potion, rollpumpkin: SM.pumpkinSm, flame: SM.pumpkinSm, gas: SM.gas, snowball: SM.snowball, puckshot: SM.puckshot, basketball: SM.basketball }[s.kind];
     if (s.kind === 'wave') {
       ctx.fillStyle = '#d0d0e0'; ctx.fillRect(sx - 5, sy - 3, 10, 7);
       ctx.fillStyle = '#9a94a8'; ctx.fillRect(sx - 3, sy - 6, 6, 3);
       continue;
     }
-    if (s.kind === 'rollpumpkin' || s.kind === 'flame') {
+    if (s.kind === 'rollpumpkin' || s.kind === 'flame' || s.kind === 'basketball') {
       ctx.save(); ctx.translate(sx, sy); ctx.rotate(s.t * (s.vx < 0 ? -8 : 8)); ctx.drawImage(img, -4, -3); ctx.restore();
       if (s.kind === 'flame') { ctx.fillStyle = '#ffd23f'; ctx.fillRect(sx - 1, sy - 6, 2, 3); }
       continue;
@@ -2725,7 +2839,7 @@ function updatePickups(dt) {
     if (P.dead || d > (p.kind === 'candy' ? 13 : 16)) continue;
     p.got = true;
     if (p.kind === 'candy') { addCandy(1); addScore(10); addCourage(0.4); if (p.life == null) L.candyGot++; Sound.play('candy'); FX.burst(p.x, p.y, 3, ['#ffd23f', '#f4ecd8'], { max: 40, grav: 0, life: 0.3 }); }
-    else if (p.kind === 'pail') { addCandy(10, p.x, p.y - 8); addScore(100); Sound.play('bigcandy'); FX.text(p.x, p.y - 18, 'TREAT PAIL!', '#f08a24'); }
+    else if (p.kind === 'pail') { addCandy(10, p.x, p.y - 8); addScore(100); Sound.play('bigcandy'); FX.text(p.x, p.y - 18, isDavey() ? 'GIFT BAG!' : 'TREAT PAIL!', '#f08a24'); }
     else if (p.kind === 'sandwich') {
       if (run.hearts < maxHearts()) { run.hearts++; FX.text(p.x, p.y - 10, 'DELI SANDWICH! +♥', '#8fd36a'); }
       else { addScore(500); FX.text(p.x, p.y - 10, 'DELI SANDWICH! +500', '#8fd36a'); }
@@ -2739,7 +2853,7 @@ function drawPickups() {
     if (p.x < L.camX - 10 || p.x > L.camX + W + 10) continue;
     if (p.life != null && p.life < 2 && Math.floor(p.life * 10) % 2) continue;
     const bob = p.placed ? Math.round(Math.sin(L.time * 4 + p.x * 0.1) * 1.5) : 0;
-    const img = p.kind === 'candy' ? SM.candy : p.kind === 'pail' ? SM.pail : SM.sandwich;
+    const img = p.kind === 'candy' ? (isDavey() ? SM.present : SM.candy) : p.kind === 'pail' ? (isDavey() ? SM.giftsack : SM.pail) : SM.sandwich;
     ctx.drawImage(img, Math.round(p.x - L.camX - img.width / 2), Math.round(p.y - img.height / 2) + bob);
   }
 }
@@ -2749,30 +2863,41 @@ function drawPickups() {
 // ============================================================
 const BOSS_INFO = {
   mike: { name: 'MIKE THE BULLY', hp: 46, w: 20, h: 28 },
-  wagon: { name: 'THE HENNESSEYS', hp: 70, w: 70, h: 26 },
+  // The Hennesseys fight as a simultaneous duo (see spawnBoss/updateBoss),
+  // not the single wagon vehicle this used to be — two lower-hp entities
+  // that alternately pressure the player, in the spirit of a Godskin Duo.
+  hennessey: { name: 'MR. HENNESSEY', hp: 42, w: 12, h: 20 },
+  mrshennessey: { name: 'MRS. HENNESSEY', hp: 38, w: 12, h: 20 },
   pete: { name: 'PETE LANDOLFA', hp: 96, w: 18, h: 28 },
   kidnapper: { name: 'THE KIDNAPPER', hp: 130, w: 18, h: 28 },
-  duke: { name: 'DUKE MALLOY', hp: 150, w: 18, h: 19 },
-  grabinski: { name: 'OFFICER GRABINSKI', hp: 190, w: 70, h: 26 },
-  stinger: { name: 'COACH STINGER', hp: 230, w: 18, h: 19 },
-  duke2: { name: 'DUKE MALLOY (FURIOUS)', hp: 280, w: 18, h: 19 },
+  // Duke is always fought by a fresh, zero-upgrade Davey (the shop only
+  // opens after a level ends), so his floor has to fit that fixed low DPS.
+  // The rest assume whatever upgrades a player picked up shopping between
+  // fights, same as Hubie's chapter — see calcPlayerDPS/scaleBossHp.
+  duke: { name: 'DUKE MALLOY', hp: 45, w: 18, h: 19 },
+  grabinski: { name: 'OFFICER GRABINSKI', hp: 75, w: 70, h: 26 },
+  stinger: { name: 'COACH STINGER', hp: 110, w: 18, h: 19 },
+  duke2: { name: 'DUKE MALLOY (FURIOUS)', hp: 150, w: 18, h: 19 },
 };
-// ---- DPS-based boss scaling: a fully-upgraded thermos trivializes a boss
-// tuned for a fresh one, so bosses in the back half of the run were getting
+// ---- DPS-based boss scaling: a fully-upgraded weapon trivializes a boss
+// tuned for a fresh one, so bosses in the back half of a run were getting
 // steamrolled. Estimate the player's (+ posse's) sustained damage against a
 // boss specifically (BOSS_DMG_MULT applies) and grow the boss's HP with it,
-// floored at the original hand-tuned value (so an unupgraded run — or Davey,
-// who never has upgrades — always gets exactly the designed fight) and
-// capped so a maxed-out build still gets a real fight, not an eternal one.
+// floored at the original hand-tuned value (so an unupgraded run always gets
+// exactly the designed fight) and capped so a maxed-out build still gets a
+// real fight, not an eternal one. Davey's snowball reads the same upgrade
+// fields as Hubie's thermos (see the shooting code), just off different
+// base numbers, so one formula covers both.
 function calcPlayerDPS() {
-  if (isDavey()) return SNOWBALL_DMG / SNOWBALL_CD; // fixed weapon, no upgrades to scale from
-  const fireRate = 1 / Math.max(0.06, 0.3 - run.upg.rapid * 0.06);
+  const davey = isDavey();
+  const cdBase = davey ? SNOWBALL_CD : 0.3, dmgBase = davey ? SNOWBALL_DMG : 1;
+  const fireRate = 1 / Math.max(0.06, cdBase - run.upg.rapid * 0.06);
   const pellets = run.upg.spread === 0 ? 1 : run.upg.spread === 1 ? 2 : 3;
-  const dmgPerPellet = 1 + run.upg.soup * 0.5;
+  const dmgPerPellet = dmgBase + run.upg.soup * 0.5;
   const every = run.upg.flare === 1 ? 4 : run.upg.flare >= 2 ? 3 : 0;
   const flareBonus = every > 0 ? 1 / every : 0;
   const rawDps = fireRate * (pellets * dmgPerPellet + flareBonus);
-  const bossDps = rawDps * BOSS_DMG_MULT.soup;
+  const bossDps = rawDps * BOSS_DMG_MULT[davey ? 'snowball' : 'soup'];
   const palDps = run.pals.length * 0.65 * BOSS_DMG_MULT.pal;
   return bossDps + palDps;
 }
@@ -2788,7 +2913,8 @@ function spawnBoss(kind) {
   const e = { type: 'boss', kind, boss: true, name: info.name, x: ax + W - 70, y: GROUND - info.h, w: info.w, h: info.h, hp, maxHp: hp,
     vx: 0, vy: 0, face: -1, t: 0, st: 0, state: 'intro', cd: 1.2, onGround: true, active: true, stun: 0, flash: 0, anim: 0, inv: 0,
     def: { fly: false, pts: 2500, candy: 0 }, stompCd: 0, phase: 1 };
-  if (kind === 'wagon' || kind === 'grabinski') { e.x = ax + W + 20; e.state = 'enter'; }
+  if (kind === 'grabinski' || kind === 'hennessey') { e.x = ax + W + 20; e.state = 'enter'; }
+  if (kind === 'mrshennessey') { e.x = ax - 20; e.state = 'enter'; }
   if (kind === 'mike') { e.targetX = ax + 40; e.state = 'ride'; }
   if (kind === 'kidnapper') e.x = ax + W - 50;
   L.enemies.push(e); L.boss = e;
@@ -2818,7 +2944,8 @@ function bossThrowEgg(e, kind = 'egg', spread = 0) {
 // existing "???" CAST entry instead of a named voice.
 const BOSS_TAUNTS = {
   mike: { 2: ['mike', "OKAY, NOW YOU'RE JUST BEING ANNOYING!"], 3: ['mike', "I'M TELLING EVERYONE YOU CHEAT AT THIS!"] },
-  wagon: { 2: ['mrshennessey', 'OH, YOU WANT TO PLAY ROUGH? FINE!'], 3: ['mrshennessey', 'HONEY, FLOOR IT!'] },
+  hennessey: { 2: ['hennessey', "OKAY, WE'RE DONE PLAYING NICE."], 3: ['hennessey', 'HONEY, A LITTLE HELP HERE?!'] },
+  mrshennessey: { 2: ['mrshennessey', 'OH, YOU WANT TO PLAY ROUGH? FINE!'], 3: ['mrshennessey', "NOBODY OUT-PRANKS THE HENNESSEYS!"] },
   pete: { 2: ['pete', 'RAAAWR! I MEAN IT THIS TIME!'], 3: ['pete', "OKAY, NOW I'M ACTUALLY MAD, DUBOIS!"] },
   kidnapper: { 2: ['kidnapper', 'A MUFFLED, FURIOUS GROWL ECHOES FROM BEHIND THE MASK.'], 3: ['kidnapper', 'THE TORCH SWINGS WILDER. WHOEVER THIS IS, THEY ARE DONE PLAYING.'] },
   duke: { 2: ['duke', "YOU DON'T GET TO WIN ON MY ICE, STONE!"], 3: ['duke', 'THAT DOES IT! NO MORE MR. NICE DUKE!'] },
@@ -2897,24 +3024,48 @@ function updateBoss(e, dt) {
     e.vy += 900 * dt; e.y += e.vy * dt; e.x += e.vx * dt;
     if (e.y + e.h >= GROUND) { e.y = GROUND - e.h; e.vy = 0; e.onGround = true; } else e.onGround = false;
     e.x = clamp(e.x, ax + 4, ax + aw - e.w - 4);
-  } else if (e.kind === 'wagon') {
-    if (e.state === 'enter') { e.x -= 120 * dt; if (e.x <= ax + aw - 96) { e.state = 'throw'; e.st = 0; e.cd = 0.4; } }
-    else if (e.state === 'throw') {
-      if (e.cd <= 0) { throwAt(Math.random() < 0.55 ? 'tp' : 'egg', e.x + 26, e.y + 2, predictedAim(), P.y - 12, 0.85, 380); e.cd = angry ? 0.5 : 0.75; }
-      if (e.st > (angry ? 2.2 : 3.0)) { e.state = 'honk'; e.st = 0; Sound.play('siren'); FX.text(e.x + 20, e.y - 10, 'HONK HONK!', '#ffd23f'); }
-    } else if (e.state === 'honk') {
-      e.x += Math.sin(e.st * 60) * 0.5;
-      if (e.st > 0.7) { e.state = 'charge'; e.st = 0; }
-    } else if (e.state === 'charge') {
-      e.x -= (angry ? 240 : 205) * dt;
-      if (Math.random() < 0.5) FX.parts.push({ x: e.x + e.w, y: GROUND - 4, vx: 30, vy: -10, life: 0.5, color: '#9a94a8', size: 2, grav: 0 });
-      if (e.x <= ax + 4) { e.x = ax + 4; e.state = 'reverse'; e.st = 0; FX.shake = 3; Sound.play('bonk'); }
-    } else if (e.state === 'reverse') {
-      e.x += 75 * dt;
-      if (e.cd <= 0 && angry) { throwAt('egg', e.x + 26, e.y + 2, P.x, P.y - 12, 0.7, 380); e.cd = 0.9; }
-      if (e.x >= ax + aw - 96) { e.state = 'throw'; e.st = 0; }
+  } else if (e.kind === 'hennessey' || e.kind === 'mrshennessey') {
+    // Simultaneous duo, Godskin Duo-style: pressuring only one lets the
+    // other quietly recover, so ignoring one to focus the other costs you.
+    if (e.prevHp == null) e.prevHp = e.hp;
+    e.lastHitT = e.hp < e.prevHp ? 0 : (e.lastHitT || 0) + dt;
+    e.prevHp = e.hp;
+    const partner = L.enemies.find((en) => en.boss && en !== e && (en.kind === 'hennessey' || en.kind === 'mrshennessey') && !en.down && !en.dead);
+    if (partner && e.lastHitT > 4 && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.06 * dt);
+    if (e.kind === 'hennessey') {
+      // Mr. Hennessey holds ground and lobs eggs/TP — the original prankster.
+      if (e.state === 'enter') { e.x -= 120 * dt; if (e.x <= ax + aw - 70) { e.state = 'pace'; e.st = 0; e.targetX = ax + aw - 70; } }
+      else if (e.state === 'pace') {
+        const d = e.targetX - e.x;
+        e.face = sign(d) || e.face; e.x += sign(d) * (angry ? 55 : 40) * dt;
+        if (Math.abs(d) < 4 || e.st > 1.6) { e.state = 'throw'; e.st = 0; e.cd = 0.2; e.n = 0; }
+      } else if (e.state === 'throw') {
+        e.face = sign(dx) || e.face;
+        if (e.cd <= 0 && e.n < (angry ? 3 : 2)) { throwAt(Math.random() < 0.5 ? 'tp' : 'egg', e.x + e.w / 2, e.y + 2, predictedAim(), P.y - 12, 0.85, 380); e.cd = 0.55; e.n++; }
+        if (e.n >= (angry ? 3 : 2)) { e.state = 'pace'; e.st = 0; e.targetX = clamp(ax + rand(30, aw - 30), ax + 20, ax + aw - 20); }
+      }
+      e.x = clamp(e.x, ax + 4, ax + aw - e.w - 4);
+    } else {
+      // Mrs. Hennessey stays mobile and dumps her signature slime bucket.
+      if (e.state === 'enter') { e.x += 110 * dt; if (e.x >= ax + 50) { e.state = 'approach'; e.st = 0; } }
+      else if (e.state === 'approach') {
+        const targetX = clamp(P.x + (P.x < e.x ? 40 : -40), ax + 16, ax + aw - 16);
+        const d = targetX - e.x;
+        e.face = sign(dx) || e.face; e.x += sign(d) * (angry ? 70 : 52) * dt;
+        if (Math.abs(d) < 6 || e.st > 1.4) { e.state = 'dump'; e.st = 0; e.b1 = false; }
+      } else if (e.state === 'dump') {
+        e.face = sign(dx) || e.face;
+        if (e.st > 0.3 && !e.b1) {
+          e.b1 = true; Sound.play('throw'); FX.text(e.x + e.w / 2, e.y - 12, 'INCOMING!', '#8fd36a', { life: 0.6 });
+          L.eshots.push({ kind: 'gas', x: e.x + e.w / 2, y: e.y + 4, vx: (P.x - e.x) * 0.4, vy: -60, grav: 260, w: 6, h: 6, life: 2 });
+        }
+        if (e.st > (angry ? 0.6 : 0.9)) { e.state = 'retreat'; e.st = 0; e.retreatDir = sign(e.x - P.x) || -1; }
+      } else if (e.state === 'retreat') {
+        e.x += e.retreatDir * 90 * dt;
+        if (e.st > 0.7) { e.state = 'approach'; e.st = 0; }
+      }
+      e.x = clamp(e.x, ax + 4, ax + aw - e.w - 4);
     }
-    if (angry && Math.random() < 0.2) FX.parts.push({ x: e.x + 8, y: e.y + 6, vx: rand(-10, 10), vy: -25, life: 0.8, color: '#6b6b7b', size: 2, grav: -10 });
   } else if (e.kind === 'pete') {
     if (e.state === 'intro' || e.state === 'walk') {
       if (e.state === 'intro') e.state = 'walk';
@@ -2959,18 +3110,37 @@ function updateBoss(e, dt) {
     if (Math.random() < 0.6) FX.parts.push({ x: e.x + (e.face > 0 ? e.w + 2 : -2), y: e.y + 12, vx: rand(-8, 8), vy: -35, life: 0.35, color: choose(['#ff6a1f', '#ffd23f']), size: 1, grav: -20 });
   } else if (e.kind === 'duke' || e.kind === 'duke2') {
     if (e.state === 'intro') { e.state = 'skate'; e.targetX = ax + 40; }
+    e.slapCd = (e.slapCd == null ? 1.5 : e.slapCd) - dt;
     if (e.state === 'skate') {
       const d = e.targetX - (e.x + e.w / 2);
       e.vx = sign(d) * (angry ? 130 : 95); e.face = sign(d) || e.face;
       if (Math.abs(d) < 8) { e.targetX = e.targetX < ax + aw / 2 ? ax + aw - 30 : ax + 30; e.state = 'throw'; e.st = 0; e.b1 = false; e.b2 = false; e.vx = 0; }
       if (e.cd <= 0) { bossThrowEgg(e); e.cd = angry ? 0.7 : 1.05; }
+      // his own signature: a flat, fast puck shot along the ice — very
+      // different to dodge than an arcing egg, so it can't be treated the
+      // same way as mike's ride-by throws.
+      if (angry && e.slapCd <= 0) {
+        L.eshots.push({ kind: 'puckshot', x: e.x + e.w / 2, y: GROUND - 5, vx: 250 * (sign(dx) || e.face), vy: 0, w: 6, h: 4, life: 1.6 });
+        Sound.play('throw'); e.slapCd = 2.1;
+      }
       e.x += e.vx * dt;
       for (let i = 0; i < 2; i++) if (Math.random() < 0.4) FX.parts.push({ x: e.x + e.w / 2, y: GROUND - 1, vx: rand(-6, 6), vy: -12, life: 0.35, color: '#cfe8ff', size: 1, grav: 10 });
     } else if (e.state === 'throw') {
       e.face = sign(dx) || -1;
       if (e.st > 0.3 && !e.b1) { e.b1 = true; for (const s of [-30, 30]) bossThrowEgg(e, 'egg', s); }
-      if (furious && e.st > 0.6 && !e.b2) { e.b2 = true; e.state = 'charge'; e.st = 0; e.vx = (sign(dx) || e.face) * 210; }
+      if (e.kind === 'duke2' && furious && e.st > 0.6 && !e.b3) {
+        // duke2's own upgrade over duke, not just a bigger health bar: a
+        // desperation spin that fans three pucks out at once.
+        e.b3 = true; e.state = 'icestorm'; e.st = 0;
+        Sound.play('siren'); FX.text(e.x + e.w / 2, e.y - 14, 'ICE STORM!', '#7f9fec', { life: 1 });
+      } else if (furious && e.st > 0.6 && !e.b2) { e.b2 = true; e.state = 'charge'; e.st = 0; e.vx = (sign(dx) || e.face) * 210; }
       else if (e.st > 1.0) e.state = 'skate';
+    } else if (e.state === 'icestorm') {
+      if (e.st > 0.25 && !e.b4) {
+        e.b4 = true;
+        for (const a of [-0.18, 0, 0.18]) L.eshots.push({ kind: 'puckshot', x: e.x + e.w / 2, y: GROUND - 5, vx: Math.cos(a) * 230 * (sign(dx) || e.face), vy: Math.sin(a) * 230, w: 6, h: 4, life: 1.4 });
+      }
+      if (e.st > 1.0) { e.state = 'skate'; e.st = 0; e.b4 = false; }
     } else if (e.state === 'charge') {
       e.x += e.vx * dt;
       if (Math.random() < 0.5) FX.parts.push({ x: e.x + e.w / 2, y: GROUND - 2, vx: rand(-10, 10), vy: -14, life: 0.4, color: '#cfe8ff', size: 1, grav: 10 });
@@ -2998,7 +3168,7 @@ function updateBoss(e, dt) {
     if (e.state === 'intro' || e.state === 'walk') {
       if (e.state === 'intro') e.state = 'walk';
       e.face = sign(dx) || -1; e.x += e.face * (angry ? 44 : 34) * dt;
-      if (e.st > 2.0) { e.st = 0; e.state = angry && Math.random() < 0.4 ? 'whistle' : 'lunge'; }
+      if (e.st > 2.0) { e.st = 0; e.b1 = false; e.state = angry && Math.random() < 0.35 ? 'whistle' : Math.random() < 0.5 ? 'lunge' : 'dribble'; }
     } else if (e.state === 'lunge') {
       if (e.st < dt * 1.5) e.vx = clamp((P.x - (e.x + e.w / 2)) / 0.5, -190, 190);
       e.x += e.vx * dt;
@@ -3009,6 +3179,16 @@ function updateBoss(e, dt) {
         for (let i = 0; i < 2; i++) L.enemies.push(makeEnemy('elf', e.x + (i ? 20 : -10), null, { active: true }));
       }
       if (e.st > 0.9) { e.state = 'walk'; e.st = 0; }
+    } else if (e.state === 'dribble') {
+      // his own signature: a basketball that bounces down the court, low
+      // and hard, closer to a shot you have to jump or dodge than a lobbed
+      // egg you can just outrun.
+      if (e.st < dt * 1.5) { FX.text(e.x + 9, e.y - 8, 'HEADS UP!', '#f08a24'); Sound.play('throw'); }
+      if (e.st > 0.25 && !e.b1) {
+        e.b1 = true;
+        L.eshots.push({ kind: 'basketball', x: e.x + e.w / 2, y: e.y + 6, vx: (angry ? 190 : 150) * (sign(dx) || e.face), vy: -60, grav: 420, w: 6, h: 6, life: 2.2 });
+      }
+      if (e.st > 0.7) { e.state = 'walk'; e.st = 0; }
     }
     e.x = clamp(e.x, ax + 4, ax + aw - e.w - 4);
   }
@@ -3021,6 +3201,17 @@ function updateBoss(e, dt) {
   }
 }
 function bossDefeated(e) {
+  if (e.kind === 'hennessey' || e.kind === 'mrshennessey') {
+    const partner = L.enemies.find((en) => en.boss && en !== e && (en.kind === 'hennessey' || en.kind === 'mrshennessey') && !en.down && !en.dead);
+    if (partner) {
+      e.dead = false; e.down = true; e.hidden = true; e.t = 0;
+      Sound.play('bosshit'); FX.shake = 5;
+      L.kos.push({ img: (e.kind === 'hennessey' ? S.hennessey : S.mrshennessey)[0], x: e.x, y: e.y, vx: -e.face * 55, vy: -250, rot: 0, vr: 8, flip: e.face < 0 });
+      FX.text(e.x + e.w / 2, e.y - 12, CAST[e.kind][0] + ' IS DOWN!', '#ffd23f', { life: 1.6 });
+      return; // the other Hennessey fights on
+    }
+    L.kos.push({ img: (e.kind === 'hennessey' ? S.hennessey : S.mrshennessey)[0], x: e.x, y: e.y, vx: -e.face * 55, vy: -250, rot: 0, vr: 8, flip: e.face < 0 });
+  }
   e.dead = false; e.down = true; e.t = 0;
   L.bossPhase = 'down'; L.bossDownT = 0;
   addScore(2500); run.stats.defeated++;
@@ -3045,8 +3236,10 @@ function drawBoss(e) {
   const sx = Math.round(e.x - L.camX), sy = Math.round(e.y);
   if (e.kind === 'mike') {
     drawRider({ who: 'skeleton', bike: BIKES.mike, pedal: e.t * 9, wheelT: e.x, pose: 'ride' }, sx + e.w / 2, sy + e.h, e.face, 0);
-  } else if (e.kind === 'wagon') {
-    drawSpr(WAGON[Math.floor(e.t * 8) % 2], sx - 1, sy - 4, true);
+  } else if (e.kind === 'hennessey' || e.kind === 'mrshennessey') {
+    const spr = e.kind === 'hennessey' ? S.hennessey : S.mrshennessey;
+    const moving = e.state === 'pace' || e.state === 'approach' || e.state === 'retreat' || e.state === 'enter';
+    drawSpr(spr[moving ? Math.floor(e.t * 6) % 2 : 0], sx - 1, sy, e.face < 0);
   } else if (e.kind === 'pete') {
     const crouch = e.state === 'crouch' ? 2 : 0, bob = e.state === 'walk' ? Math.floor(e.t * 5) % 2 : 0;
     drawSpr(BG_SPR.pete, sx - 1, sy + crouch + bob, e.face < 0);
@@ -3208,6 +3401,13 @@ const MOM_LINES = [
   "YOU'RE A GOOD BOY, HUBIE. THE REST OF THIS TOWN? WE'LL SEE.",
   "I'M SEWING YOU A NEW MONITOR SASH. AND SHARPENING THE SCISSORS.",
 ];
+const WHITEY_LINES = [
+  "GEAR UP, STONE. THE ICE DOESN'T CARE HOW YOU GOT HERE.",
+  "I'D SAY BE CAREFUL OUT THERE, BUT YOU FELL OUT OF THE SKY AND YOU'RE FINE.",
+  "DUKE'S NOT GETTING ANY LESS ANNOYING. GEAR UP.",
+  'TAKE THE MITTENS. TRUST ME ON THIS ONE.',
+  "STILL WEIRD THAT YOU DON'T REMEMBER BUYING ANY OF THIS STUFF.",
+];
 function setState(s) { state = s; stateT = 0; menuSel = 0; Input.clearClicks(); }
 function toast(msg) { toastMsg = msg; toastT = 1.4; }
 function snapshotStats() { return JSON.parse(JSON.stringify(run.stats)); }
@@ -3282,9 +3482,10 @@ function updateVictims(dt) { for (const v of L.victims) if (v.freed) { v.t += dt
 
 function updatePlay(dt) {
   if (Input.hit('pause')) { setState('pause'); Sound.play('select'); return; }
-  if (L.boss && L.boss.pendingTaunt && !L.boss.down) {
-    const taunt = (BOSS_TAUNTS[L.boss.kind] || {})[L.boss.pendingTaunt];
-    L.boss.pendingTaunt = 0;
+  for (const bb of [L.boss, L.boss2]) {
+    if (!bb || !bb.pendingTaunt || bb.down) continue;
+    const taunt = (BOSS_TAUNTS[bb.kind] || {})[bb.pendingTaunt];
+    bb.pendingTaunt = 0;
     if (taunt) { startStory([taunt], () => setState('play'), 'level'); return; }
   }
   L.time += dt; L.bannerT += dt;
@@ -3314,7 +3515,7 @@ function updatePlay(dt) {
     if (m.got || P.dead || Math.abs(P.x - m.x) > 18 || P.y < GROUND - 80) continue;
     m.got = true; run.pals.push(m.id); Sound.play('pal');
     const i = run.pals.length - 1, pos = palPos(i);
-    L.palState[m.id] = { cd: 1.2, dx: 0, px: m.x, py: GROUND, pvy: 0, dash: 0, anim: 0, say: 2.6, sayText: PALS[m.id].line };
+    L.palState[m.id] = { cd: 1.2, dx: 0, px: m.x, py: GROUND, pvy: 0, dash: 0, anim: 0, say: 2.6, sayText: PALS[m.id].line, hp: 3, downT: 0, hurtCd: 0 };
     FX.text(m.x, GROUND - 70, PALS[m.id].name + ' JOINED THE POSSE!', PALS[m.id].color, { life: 2.2, vy: -10 });
     FX.text(m.x, GROUND - 60, PALS[m.id].power, '#f4ecd8', { life: 2.2, vy: -10 });
     if (L.def.palIntro) { startStory(L.def.palIntro, () => setState('play'), 'level'); return; }
@@ -3337,8 +3538,8 @@ function updatePlay(dt) {
     L.lockL = L.arenaX; L.lockR = L.arenaX + L.arenaW;
     L.enemies = L.enemies.filter((e) => e.x > L.arenaX - 10 && e.x < L.arenaX + L.arenaW);
     if (L.def.boss === 'kidnapper') setupVictims();
-    const b = spawnBoss(L.def.boss);
-    if (b.kind === 'wagon') { b.x = L.arenaX + L.arenaW - 96; b.state = 'throw'; b.st = 0; }
+    if (L.def.boss === 'wagon') { L.boss2 = spawnBoss('hennessey'); spawnBoss('mrshennessey'); }
+    else spawnBoss(L.def.boss);
     Sound.playMusic('boss');
   }
   if (L.bossPhase === 'intro') {
@@ -3390,18 +3591,18 @@ function drawWorld() {
 }
 function drawHUD() {
   for (let i = 0; i < maxHearts(); i++) ctx.drawImage(i < run.hearts ? SM.heart : SM.heartE, 4 + i * 9, 4);
-  ctx.drawImage(SM.candy, 5, 13);
+  ctx.drawImage(isDavey() ? SM.present : SM.candy, 5, 13);
   drawText(String(run.candy), 13, 13, '#ffd23f', { outline: '#140c1c' });
   drawText('SCORE ' + String(run.score).padStart(6, '0'), W - 4, 4, '#f4ecd8', { align: 'right', outline: '#140c1c' });
-  // courage meter
-  const full = P.courage >= 100;
+  // courage meter (Davey's version is a "streak" building toward a snowball frenzy)
+  const full = P.courage >= 100, davey = isDavey();
   const bx = W - 70, by = 14;
-  drawText('COURAGE', bx - 2, by, full && Math.floor(L.time * 6) % 2 ? '#ffd23f' : '#c8c0e0', { align: 'right', outline: '#140c1c' });
+  drawText(davey ? 'STREAK' : 'COURAGE', bx - 2, by, full && Math.floor(L.time * 6) % 2 ? (davey ? '#7f9fec' : '#ffd23f') : '#c8c0e0', { align: 'right', outline: '#140c1c' });
   ctx.fillStyle = '#140c1c'; ctx.fillRect(bx, by, 66, 7);
   ctx.fillStyle = '#4b2a7a'; ctx.fillRect(bx + 1, by + 1, 64, 5);
-  ctx.fillStyle = full ? (Math.floor(L.time * 8) % 2 ? '#ffd23f' : '#8fd36a') : '#f08a24';
+  ctx.fillStyle = full ? (Math.floor(L.time * 8) % 2 ? (davey ? '#7f9fec' : '#ffd23f') : '#8fd36a') : (davey ? '#3fbcbc' : '#f08a24');
   ctx.fillRect(bx + 1, by + 1, Math.round(64 * P.courage / 100), 5);
-  if (full) drawText(Input.isTouch() ? 'TAP HOLLER!' : 'PRESS V TO HOLLER!', W - 4, 24, '#8fd36a', { align: 'right', outline: '#140c1c' });
+  if (full) drawText(Input.isTouch() ? (davey ? 'TAP FRENZY!' : 'TAP HOLLER!') : (davey ? 'PRESS V FOR FRENZY!' : 'PRESS V TO HOLLER!'), W - 4, 24, '#8fd36a', { align: 'right', outline: '#140c1c' });
   // pals + umbrella
   let ix = 5;
   run.pals.forEach((id) => {
@@ -3414,15 +3615,29 @@ function drawHUD() {
     ctx.fillStyle = ready ? '#2c4fb3' : '#4a4658';
     ctx.fillRect(ix + 1, 26, 9, 2); ctx.fillRect(ix + 3, 25, 5, 1); ctx.fillStyle = '#5c3a1c'; ctx.fillRect(ix + 5, 28, 1, 4);
   }
-  // boss bar
-  const b = L.boss;
-  if (b && (L.bossPhase === 'fight') && !b.down) {
-    const w = 180, x = (W - w) / 2, y = H - 12;
-    drawText(b.name, W / 2, y - 9, '#ff6a1f', { align: 'center', outline: '#140c1c' });
-    ctx.fillStyle = '#140c1c'; ctx.fillRect(x - 1, y - 1, w + 2, 7);
-    ctx.fillStyle = '#4b2a7a'; ctx.fillRect(x, y, w, 5);
-    ctx.fillStyle = b.phase >= 3 ? '#ff3b3b' : b.phase >= 2 ? '#ffd23f' : '#d83a3a';
-    ctx.fillRect(x, y, Math.round((w * Math.max(0, b.hp)) / b.maxHp), 5);
+  // boss bar(s) — the Hennessey duo fights simultaneously, so shows two
+  // side-by-side bars until one of them goes down.
+  const b = L.boss, b2 = L.boss2;
+  if (L.bossPhase === 'fight' && b2 && !b2.down && b && !b.down) {
+    const bw = 87, y = H - 12;
+    [b2, b].forEach((bb, i) => {
+      const x = 4 + i * (bw + 6);
+      drawText(bb.name, x + bw / 2, y - 9, '#ff6a1f', { align: 'center', outline: '#140c1c' });
+      ctx.fillStyle = '#140c1c'; ctx.fillRect(x - 1, y - 1, bw + 2, 7);
+      ctx.fillStyle = '#4b2a7a'; ctx.fillRect(x, y, bw, 5);
+      ctx.fillStyle = bb.phase >= 3 ? '#ff3b3b' : bb.phase >= 2 ? '#ffd23f' : '#d83a3a';
+      ctx.fillRect(x, y, Math.round((bw * Math.max(0, bb.hp)) / bb.maxHp), 5);
+    });
+  } else {
+    const survivor = b2 && !b2.down ? b2 : b && !b.down ? b : null;
+    if (survivor && L.bossPhase === 'fight') {
+      const w = 180, x = (W - w) / 2, y = H - 12;
+      drawText(survivor.name, W / 2, y - 9, '#ff6a1f', { align: 'center', outline: '#140c1c' });
+      ctx.fillStyle = '#140c1c'; ctx.fillRect(x - 1, y - 1, w + 2, 7);
+      ctx.fillStyle = '#4b2a7a'; ctx.fillRect(x, y, w, 5);
+      ctx.fillStyle = survivor.phase >= 3 ? '#ff3b3b' : survivor.phase >= 2 ? '#ffd23f' : '#d83a3a';
+      ctx.fillRect(x, y, Math.round((w * Math.max(0, survivor.hp)) / survivor.maxHp), 5);
+    }
   }
   if (L.level === 0 && L.bannerT > 3 && L.bannerT < 3 + 5 * HINTS_KEYS.length) {
     const hints = Input.isTouch() ? HINTS_TOUCH : HINTS_KEYS;
@@ -3575,7 +3790,11 @@ function drawMenu(items, x, y0, dy, align = 'center') {
     drawText(label, x, y0 + i * dy, sel ? '#ffd23f' : '#c8c0e0', { align, outline: '#140c1c' });
   });
 }
-function titleItems() { const sv = store('hubie_save'); return sv ? ['NEW GAME', 'CONTINUE: LEVEL ' + (sv.next + 1), 'HOW TO PLAY'] : ['NEW GAME', 'HOW TO PLAY']; }
+function titleItems() {
+  const sv = store('hubie_save');
+  const items = sv ? ['NEW GAME', 'CONTINUE: LEVEL ' + (sv.next + 1)] : ['NEW GAME'];
+  return items.concat(['CHAPTER 2: DAVEY', 'HOW TO PLAY']);
+}
 function updateTitle() {
   Sound.playMusic('calm');
   const items = titleItems();
@@ -3584,6 +3803,7 @@ function updateTitle() {
   Sound.play('confirm');
   const it = items[pick];
   if (it === 'NEW GAME') { run = newRun(); store('hubie_save', null); beginLevel(0); }
+  else if (it === 'CHAPTER 2: DAVEY') { run = newRun(); beginLevel(CHAPTER2_START); }
   else if (it.startsWith('CONTINUE')) {
     const sv = store('hubie_save');
     run = Object.assign(newRun(), sv.run); run.level = sv.next - 1;
@@ -3656,9 +3876,8 @@ function updateComplete() {
   if (stateT > 0.6 && (Input.confirm() || Input.takeClick())) {
     Sound.play('confirm');
     if (run.level >= LEVELS.length - 1) { startStory(EPILOGUE, () => { Sound.playMusic('happy'); setState('credits'); }, 'epilogue'); }
-    else if (run.level + 1 > CHAPTER2_START) { beginLevel(run.level + 1); } // Davey has no thermos workbench to visit
     else {
-      momLine = choose(run.level === 4 ? ["GO GET 'EM, HUBIE. I'LL BE... AROUND."]
+      momLine = isDavey() ? choose(WHITEY_LINES) : choose(run.level === 4 ? ["GO GET 'EM, HUBIE. I'LL BE... AROUND."]
         : run.level === 5 ? ['I DON\'T KNOW WHAT THAT WEIRD LIGHT IN THE SKY IS, BUT I ALREADY HATE IT.']
         : MOM_LINES);
       shopSel = 0; setState('shop');
@@ -3696,65 +3915,69 @@ function buyUpgrade(u) {
   const cost = upgCost(u);
   if (cost == null) { Sound.play('deny'); toast('ALREADY MAXED OUT'); return; }
   if (u.consumable && run.hearts >= maxHearts()) { Sound.play('deny'); toast('HEARTS ARE ALREADY FULL'); return; }
-  if (run.candy < cost) { Sound.play('deny'); toast('NOT ENOUGH CANDY CORN'); return; }
+  if (run.candy < cost) { Sound.play('deny'); toast(isDavey() ? 'NOT ENOUGH PRESENTS' : 'NOT ENOUGH CANDY CORN'); return; }
   run.candy -= cost;
   if (u.consumable) run.hearts = maxHearts();
   else { run.upg[u.id]++; if (u.id === 'inhaler') run.hearts++; }
-  Sound.play('buy'); toast(u.name + (u.consumable ? '!' : ' UPGRADED!'));
+  Sound.play('buy'); toast(upgName(u) + (u.consumable ? '!' : ' UPGRADED!'));
 }
 const SHOP_Y = 22, SHOP_DY = 10;
 function updateShop() {
   Sound.playMusic('calm');
-  const n = UPGRADES.length + 1;
+  const items = shopUpgrades(), n = items.length + 1;
   if (Input.hit('down')) { shopSel = (shopSel + 1) % n; Sound.play('select'); }
   if (Input.hit('up') && !Input.down('jump')) { shopSel = (shopSel - 1 + n) % n; Sound.play('select'); }
   let act = Input.hit('start') || Input.hit('shoot') || (Input.hit('jump') && !Input.down('up'));
   const c = Input.takeClick();
   if (c) {
     const i = Math.floor((c.y - SHOP_Y + 1) / SHOP_DY);
-    if (c.x < 196 && i >= 0 && i < UPGRADES.length) { if (shopSel === i) act = true; else { shopSel = i; Sound.play('select'); } }
+    if (c.x < 196 && i >= 0 && i < items.length) { if (shopSel === i) act = true; else { shopSel = i; Sound.play('select'); } }
     else if (c.y >= 150 && c.x < 196) { shopSel = n - 1; act = true; }
   }
   if (!act) return;
   if (shopSel === n - 1) { Sound.play('confirm'); beginLevel(run.level + 1); return; }
-  buyUpgrade(UPGRADES[shopSel]);
+  buyUpgrade(items[shopSel]);
 }
 function drawShop() {
-  if (!momLine) momLine = choose(MOM_LINES);
+  const davey = isDavey(), items = shopUpgrades();
+  if (!momLine) momLine = choose(davey ? WHITEY_LINES : MOM_LINES);
   ctx.fillStyle = '#160c22'; ctx.fillRect(0, 0, W, H);
   for (let y = 0; y < H; y += 8) { ctx.fillStyle = y % 16 ? '#1a0f2b' : '#1d1130'; ctx.fillRect(0, y, W, 8); }
   ctx.fillStyle = '#5c3a1c'; ctx.fillRect(0, H - 14, W, 14); ctx.fillStyle = '#7e5a2e'; ctx.fillRect(0, H - 14, W, 2);
-  drawText("HUBIE'S THERMOS WORKBENCH", 8, 6, '#f08a24', { outline: '#140c1c' });
-  ctx.drawImage(SM.candy, W - 58, 5);
+  drawText(davey ? "WHITEY'S PRO SHOP" : "HUBIE'S THERMOS WORKBENCH", 8, 6, '#f08a24', { outline: '#140c1c' });
+  ctx.drawImage(davey ? SM.present : SM.candy, W - 58, 5);
   drawText(String(run.candy), W - 50, 6, '#ffd23f', { outline: '#140c1c' });
   for (let i = 0; i < maxHearts(); i++) ctx.drawImage(i < run.hearts ? SM.heart : SM.heartE, W - 30 + (i % 3) * 9, 5 + Math.floor(i / 3) * 7);
-  UPGRADES.forEach((u, i) => {
+  items.forEach((u, i) => {
     const y = SHOP_Y + i * SHOP_DY, sel = i === shopSel;
     const cost = upgCost(u), lvl = run.upg[u.id];
     if (sel) { ctx.fillStyle = '#3a2350'; ctx.fillRect(4, y - 2, 190, SHOP_DY); }
     const afford = cost != null && run.candy >= cost;
-    drawText(u.name, 8, y, sel ? '#ffd23f' : '#f4ecd8');
+    drawText(upgName(u), 8, y, sel ? '#ffd23f' : '#f4ecd8');
     if (!u.consumable) for (let k = 0; k < u.costs.length; k++) { ctx.fillStyle = k < lvl ? '#8fd36a' : '#4a4658'; ctx.fillRect(116 + k * 6, y + 1, 4, 5); }
     drawText(cost == null ? 'MAX' : String(cost), 190, y, cost == null ? '#8fd36a' : afford ? '#ffd23f' : '#6b6b7b', { align: 'right' });
   });
-  const cy = SHOP_Y + UPGRADES.length * SHOP_DY + 4;
-  const csel = shopSel === UPGRADES.length;
+  const cy = SHOP_Y + items.length * SHOP_DY + 4;
+  const csel = shopSel === items.length;
   ctx.fillStyle = csel ? '#f08a24' : '#3a2350'; ctx.fillRect(4, cy - 2, 190, 11);
   drawText('RIDE ON: ' + LEVELS[Math.min(run.level + 1, LEVELS.length - 1)].title + ' >', 99, cy, csel ? '#140c1c' : '#f4ecd8', { align: 'center' });
-  // Mom and her workbench advice
+  // Advisor and their shop-front advice
   const mx = 238;
-  ctx.drawImage(S.mom[0], 0, 0, 12, 20, mx, 58, 24, 40);
-  drawText('MOM', mx + 12, 100, '#e0609a', { align: 'center' });
+  ctx.drawImage(davey ? S.whitey[0] : S.mom[0], 0, 0, 12, 20, mx, 58, 24, 40);
+  drawText(davey ? 'WHITEY' : 'MOM', mx + 12, 100, davey ? '#ffcf3b' : '#e0609a', { align: 'center' });
   const bl = wrapText(momLine, 108);
   const bh = bl.length * 9 + 4;
   ctx.fillStyle = '#f4ecd8'; ctx.fillRect(202, 52 - bh, 114, bh); ctx.fillRect(mx + 10, 52, 3, 3);
   bl.forEach((l, i) => drawText(l, 205, 54 - bh + i * 9, '#140c1c'));
-  if (shopSel < UPGRADES.length) {
-    const u = UPGRADES[shopSel];
-    const lines = wrapText(u.desc, 112);
+  if (shopSel < items.length) {
+    const u = items[shopSel];
+    const lines = wrapText(upgDesc(u), 112);
     lines.forEach((l, i) => drawText(l, 202, 112 + i * 9, '#c8c0e0'));
     const lvl = run.upg[u.id];
     drawText(u.consumable ? 'REFILLS HEARTS' : 'LEVEL ' + lvl + ' / ' + u.costs.length, 202, 112 + lines.length * 9 + 3, '#8fd36a');
+  } else if (davey) {
+    drawText('SKATE ON!', 202, 112, '#ffd23f');
+    drawText('POSSE: ' + run.pals.length + ' PALS', 202, 122, '#c8c0e0');
   } else {
     drawText('SAVE SALEM!', 202, 112, '#ffd23f');
     drawText('POSSE: ' + run.pals.length + ' PALS', 202, 122, '#c8c0e0');
