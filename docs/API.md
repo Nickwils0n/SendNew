@@ -9,10 +9,20 @@ provisioning tooling, not the public website.
 - `GET /api/devices` — Mac minis assigned to this company, with `online` status.
 - `GET /api/conversations` — list conversations (one per device+contact pair).
 - `GET /api/conversations/:id/messages` — full thread, oldest first.
-- `POST /api/send` `{ deviceId, to, body, mediaUrl?, kind? }` — send an
-  iMessage/SMS through a given Mac mini. Returns `202` with the created
-  `message` row (status `QUEUED`), or `503` if that device isn't currently
-  connected. `mediaUrl`, if set, must be a URL the Mac mini can actually
+- `POST /api/send` `{ deviceId?, to, body, mediaUrl?, kind? }` — send an
+  iMessage/SMS. `deviceId` is optional: omit it and the server picks the
+  Mac mini for you — an existing conversation with `to` stays on its device
+  (sticky, so a contact never appears to switch numbers mid-conversation),
+  and a brand-new contact is load-balanced across the company's `ASSIGNED`
+  and online devices, under each one's daily new-contact cap (see
+  `Device.dailyCapOverride` / `Company.defaultDailyCap`), to avoid any one
+  number getting flagged for messaging too many new people too fast.
+  Returns `202` with the created `message` row (status `QUEUED`); `503` if
+  the chosen (or given) device isn't currently connected, or no assigned
+  device is online at all when none was given; `429` with `held: true` if
+  every eligible device for this company is already at today's cap — the
+  message isn't sent, raise a device's cap or the company's default, or try
+  again tomorrow. `mediaUrl`, if set, must be a URL the Mac mini can actually
   download from (publicly reachable, or at least reachable from wherever
   that Mac sits) — the agent fetches it and hands the file to Messages.app,
   it does not treat `mediaUrl` as anything Apple-specific.
@@ -77,7 +87,27 @@ every signup:
 - `POST /admin/companies/:id/regenerate-key` — rotates and returns a new
   `apiKey`. Wire this to a "Regenerate API key" button; the old key stops
   working immediately.
-- `PATCH /admin/companies/:id` `{ name?, webhookUrl? }`.
+- `PATCH /admin/companies/:id` `{ name?, webhookUrl?, defaultDailyCap? }` —
+  `defaultDailyCap` is the new-contacts-per-device-per-day cap applied to
+  this company's devices unless a device overrides it (see below); `null`
+  means uncapped.
+- `GET /admin/devices` / `GET /admin/devices/:id` — list or fetch one Mac
+  mini. Never includes `passwordHash`. Carries `rackSlot`, `switchPort`,
+  `dailyCapOverride` alongside the existing fields, for a rack-console UI
+  that lets an operator place each Mac mini in a physical bay/switch port
+  and see/edit its cap override — purely inventory bookkeeping, these three
+  fields drive no send logic themselves.
+- `PATCH /admin/devices/:id` `{ label?, phoneNumber?, rackSlot?, switchPort?, dailyCapOverride? }`
+  — general field edits. `rackSlot` (1-20) and `switchPort` (1-32) are each
+  unique across devices; claiming one already taken returns `409`.
+- `GET /admin/devices/:id/logs?limit=&before=` — that device's `DeviceLog`
+  rows, newest first (`limit` capped at 200; `before` is an ISO timestamp
+  to page back further).
+- `GET /admin/devices/:id/usage-today` — `{ newContactsToday, cap }` for
+  that device: how many new conversations it's started today (UTC day
+  boundary) against its effective cap (its own override, else the
+  company's `defaultDailyCap`, else `null` for uncapped) — what
+  `POST /api/send`'s load-balancing picks devices against.
 - `POST /admin/devices/:id/reset-password` — generates and returns a fresh
   password for that device's existing username (stored hashed, so it can't
   be recovered if lost). Company assignment, phoneNumber, and label are

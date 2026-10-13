@@ -3,9 +3,28 @@ const { nanoid } = require("nanoid");
 const { prisma } = require("../db");
 const { hashPassword, requireAdminSecret } = require("../auth");
 const { asyncHandler } = require("../asyncHandler");
+const { newContactsToday, capFor } = require("../conversations");
 
 const router = express.Router();
 router.use(requireAdminSecret);
+
+// Rack console bounds (one rack, one 32-port switch -- see dmg-build/docs;
+// generalize only if a second rack is actually bought).
+const RACK_BAYS = 20;
+const SWITCH_PORTS = 32;
+
+// Never hand back passwordHash. Every /admin/devices* response goes through
+// this, including the ones that also include the related company.
+function deviceOut(device) {
+  const { passwordHash, ...rest } = device;
+  return rest;
+}
+
+const intOrNull = (v, lo, hi) => {
+  if (v === null || v === "" || v === undefined) return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= lo && n <= hi ? n : NaN;
+};
 
 // Create a company (one per CRM tenant on your website).
 router.post("/companies", asyncHandler(async (req, res) => {
@@ -41,14 +60,17 @@ router.post("/companies/:id/regenerate-key", asyncHandler(async (req, res) => {
 }));
 
 router.patch("/companies/:id", asyncHandler(async (req, res) => {
-  const { webhookUrl, name } = req.body;
-  const company = await prisma.company.update({
-    where: { id: req.params.id },
-    data: {
-      ...(webhookUrl !== undefined ? { webhookUrl } : {}),
-      ...(name !== undefined ? { name } : {}),
-    },
-  });
+  const { webhookUrl, name, defaultDailyCap } = req.body;
+  const data = {
+    ...(webhookUrl !== undefined ? { webhookUrl } : {}),
+    ...(name !== undefined ? { name } : {}),
+  };
+  if (defaultDailyCap !== undefined) {
+    const cap = intOrNull(defaultDailyCap, 0, 100000);
+    if (Number.isNaN(cap)) return res.status(400).json({ error: "defaultDailyCap is a whole number" });
+    data.defaultDailyCap = cap;
+  }
+  const company = await prisma.company.update({ where: { id: req.params.id }, data });
   res.json(company);
 }));
 
@@ -71,7 +93,58 @@ router.get("/devices", asyncHandler(async (_req, res) => {
     orderBy: { createdAt: "desc" },
     include: { company: true },
   });
-  res.json(devices);
+  res.json(devices.map(deviceOut));
+}));
+
+// Single device, for the rack console's zoomed-in panel.
+router.get("/devices/:id", asyncHandler(async (req, res) => {
+  const device = await prisma.device.findUnique({ where: { id: req.params.id }, include: { company: true } });
+  if (!device) return res.status(404).json({ error: "not found" });
+  res.json(deviceOut(device));
+}));
+
+// General field edits. rackSlot/switchPort are unique, so a taken bay or
+// port comes back as 409 rather than a generic 500.
+router.patch("/devices/:id", asyncHandler(async (req, res) => {
+  const b = req.body || {};
+  const data = {};
+  if (b.label !== undefined) data.label = b.label || null;
+  if (b.phoneNumber !== undefined) data.phoneNumber = b.phoneNumber || null;
+  if (b.rackSlot !== undefined) data.rackSlot = intOrNull(b.rackSlot, 1, RACK_BAYS);
+  if (b.switchPort !== undefined) data.switchPort = intOrNull(b.switchPort, 1, SWITCH_PORTS);
+  if (b.dailyCapOverride !== undefined) data.dailyCapOverride = intOrNull(b.dailyCapOverride, 0, 100000);
+  if ([data.rackSlot, data.switchPort, data.dailyCapOverride].some((v) => Number.isNaN(v))) {
+    return res.status(400).json({ error: `rackSlot is 1-${RACK_BAYS}, switchPort is 1-${SWITCH_PORTS}, dailyCapOverride is a whole number` });
+  }
+  try {
+    const device = await prisma.device.update({ where: { id: req.params.id }, data, include: { company: true } });
+    res.json(deviceOut(device));
+  } catch (err) {
+    if (err.code === "P2002") return res.status(409).json({ error: "that bay or switch port is already taken" });
+    if (err.code === "P2025") return res.status(404).json({ error: "not found" });
+    throw err;
+  }
+}));
+
+// Newest DeviceLog rows first, for the panel's activity feed. ?limit (max
+// 200) and ?before=<ISO> to page back.
+router.get("/devices/:id/logs", asyncHandler(async (req, res) => {
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+  const before = req.query.before ? new Date(String(req.query.before)) : null;
+  const logs = await prisma.deviceLog.findMany({
+    where: { deviceId: req.params.id, ...(before && !isNaN(before) ? { createdAt: { lt: before } } : {}) },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  res.json(logs);
+}));
+
+// Load vs cap for today (midnight UTC), derived from Conversation.createdAt
+// -- see newContactsToday()/capFor() in conversations.js.
+router.get("/devices/:id/usage-today", asyncHandler(async (req, res) => {
+  const device = await prisma.device.findUnique({ where: { id: req.params.id }, include: { company: true } });
+  if (!device) return res.status(404).json({ error: "not found" });
+  res.json({ newContactsToday: await newContactsToday(device.id), cap: capFor(device, device.company) });
 }));
 
 // Assign a provisioned Mac mini to a company so it starts handling that
@@ -83,7 +156,7 @@ router.post("/devices/:id/assign", asyncHandler(async (req, res) => {
     where: { id: req.params.id },
     data: { companyId, status: "ASSIGNED" },
   });
-  res.json(device);
+  res.json(deviceOut(device));
 }));
 
 router.post("/devices/:id/unassign", asyncHandler(async (req, res) => {
@@ -91,7 +164,7 @@ router.post("/devices/:id/unassign", asyncHandler(async (req, res) => {
     where: { id: req.params.id },
     data: { companyId: null, status: "UNASSIGNED" },
   });
-  res.json(device);
+  res.json(deviceOut(device));
 }));
 
 // Passwords are stored hashed and can't be recovered -- use this when a

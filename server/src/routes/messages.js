@@ -3,6 +3,7 @@ const { prisma } = require("../db");
 const { requireCompanyApiKey } = require("../auth");
 const { sendToDevice, isDeviceOnline } = require("../wsHub");
 const { asyncHandler } = require("../asyncHandler");
+const { pickDeviceForContact } = require("../conversations");
 
 const router = express.Router();
 router.use(requireCompanyApiKey);
@@ -47,39 +48,52 @@ router.post("/send", asyncHandler(async (req, res) => {
       `body=${body !== undefined ? JSON.stringify(body) : "(none)"} ` +
       `mediaUrl=${mediaUrl || "(none)"} kind=${kind || "(default)"}`
   );
-  if (!deviceId || !to || (!body && !mediaUrl)) {
-    return res.status(400).json({ error: "deviceId, to, and body or mediaUrl are required" });
+  if (!to || (!body && !mediaUrl)) {
+    return res.status(400).json({ error: "to, and body or mediaUrl are required" });
   }
 
-  const device = await prisma.device.findFirst({
-    where: { id: deviceId, companyId: req.company.id },
-  });
-  if (!device) return res.status(404).json({ error: "device not found for this company" });
+  // deviceId is optional: without it, an existing conversation stays on its
+  // device and a new contact is load-balanced across the company's numbers
+  // under each one's daily new-contact cap (see conversations.js).
+  let device;
+  if (deviceId) {
+    device = await prisma.device.findFirst({ where: { id: deviceId, companyId: req.company.id } });
+    if (!device) return res.status(404).json({ error: "device not found for this company" });
+  } else {
+    const pick = await pickDeviceForContact(req.company, to, isDeviceOnline);
+    if (pick.held) {
+      return pick.anyOnline
+        ? res.status(429).json({ error: "every device for this company is at today's new-contact cap", held: true })
+        : res.status(503).json({ error: "no assigned device is online" });
+    }
+    device = pick.device;
+  }
 
+  const sendDeviceId = device.id;
   const conversation = await prisma.conversation.upsert({
-    where: { deviceId_contactHandle: { deviceId, contactHandle: to } },
-    create: { deviceId, companyId: req.company.id, contactHandle: to },
+    where: { deviceId_contactHandle: { deviceId: sendDeviceId, contactHandle: to } },
+    create: { deviceId: sendDeviceId, companyId: req.company.id, contactHandle: to },
     update: {},
   });
 
   const message = await prisma.message.create({
     data: {
       conversationId: conversation.id,
-      deviceId,
+      deviceId: sendDeviceId,
       direction: "OUTBOUND",
       kind: kind || "IMESSAGE",
       body: body || null,
       mediaUrl: mediaUrl || null,
-      status: isDeviceOnline(deviceId) ? "QUEUED" : "FAILED",
-      error: isDeviceOnline(deviceId) ? null : "device offline",
+      status: isDeviceOnline(sendDeviceId) ? "QUEUED" : "FAILED",
+      error: isDeviceOnline(sendDeviceId) ? null : "device offline",
     },
   });
 
-  if (!isDeviceOnline(deviceId)) {
+  if (!isDeviceOnline(sendDeviceId)) {
     return res.status(503).json({ error: "device offline", message });
   }
 
-  sendToDevice(deviceId, {
+  sendToDevice(sendDeviceId, {
     type: "send_message",
     messageId: message.id,
     to,

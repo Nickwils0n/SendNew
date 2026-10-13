@@ -8,15 +8,19 @@ datasource db {
 }
 
 model Company {
-  id            String         @id @default(cuid())
-  name          String
-  apiKey        String         @unique @default(cuid())
-  webhookUrl    String?
-  webhookSecret String         @unique @default(cuid())
-  devices       Device[]
-  conversations Conversation[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  name            String
+  apiKey          String         @unique @default(cuid())
+  webhookUrl      String?
+  webhookSecret   String         @unique @default(cuid())
+  // new-contacts-per-device-per-day cap for this company's devices, used by
+  // pickDeviceForContact() to spread new-contact volume across the fleet.
+  // null = no cap (a device's own dailyCapOverride still applies if set).
+  defaultDailyCap Int?
+  devices         Device[]
+  conversations   Conversation[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 
 enum DeviceStatus {
@@ -37,6 +41,14 @@ model Device {
   companyId    String?
   lastSeenAt   DateTime?
   online       Boolean       @default(false)
+  // Which physical bay (1-RACK_BAYS) and switch port (1-SWITCH_PORTS) this
+  // Mac mini occupies in the rack console -- inventory/cable-map only, not
+  // used by any send logic. Null until an operator places it.
+  rackSlot     Int?          @unique
+  switchPort   Int?          @unique
+  // Overrides Company.defaultDailyCap for this one device; null = use the
+  // company's default (see capFor() in conversations.js).
+  dailyCapOverride Int?
   conversations Conversation[]
   messages     Message[]
   logs         DeviceLog[]
