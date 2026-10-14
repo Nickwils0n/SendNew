@@ -168,8 +168,12 @@ buttons that jump straight to the right System Settings pane.
       (one-time right-click → Open, see above)
 - [ ] PPPC profile applied (Full Disk Access + Automation), or granted
       manually on first prompt
-- [ ] Logged into the agent with its device credentials
-- [ ] Tray icon → Show Status… shows "Connected" and Full Disk Access
-      "Granted"
-- [ ] Device shows `online: true` via `GET /admin/devices` and is assigned to
-      the right company
+- [ ] Logged into the agent (or registered with the setup code) — Show
+      Status opens automatically the moment that succeeds
+- [ ] Show Status shows "Connected", Full Disk Access "Granted", and
+      Automation (Messages.app) "Granted" — Automation is now checked
+      live (an actual osascript probe), not just discovered on the first
+      failed send
+- [ ] Show Status's "Rack placement" row shows the right bay and company —
+      confirms the whole setup end to end from inside the app itself, no
+      need to separately check `GET /admin/devices` or the CRM's Rack page

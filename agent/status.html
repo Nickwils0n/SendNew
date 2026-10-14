@@ -101,6 +101,10 @@
     <span class="value" id="deviceText">—</span>
   </div>
   <div class="row">
+    <span class="label">Rack placement</span>
+    <span class="value" id="rackText">—</span>
+  </div>
+  <div class="row">
     <span class="label">Full Disk Access</span>
     <span class="value">
       <span class="dot unknown" id="fdaDot"></span><span id="fdaText">Checking…</span>
@@ -109,6 +113,16 @@
   <div class="row" id="fdaRow" style="display:none">
     <span class="label" style="font-size:11px">Needed to read incoming messages</span>
     <button id="fdaBtn">Open Settings</button>
+  </div>
+  <div class="row">
+    <span class="label">Automation (Messages.app)</span>
+    <span class="value">
+      <span class="dot unknown" id="autoDot"></span><span id="autoText">Checking…</span>
+    </span>
+  </div>
+  <div class="row" id="autoRow" style="display:none">
+    <span class="label" style="font-size:11px">Needed to send/receive iMessages</span>
+    <button id="autoBtn">Open Settings</button>
   </div>
   <div class="row">
     <span class="label">Accessibility</span>
@@ -138,9 +152,13 @@
     const connDot = document.getElementById("connDot");
     const connText = document.getElementById("connText");
     const deviceText = document.getElementById("deviceText");
+    const rackText = document.getElementById("rackText");
     const fdaDot = document.getElementById("fdaDot");
     const fdaText = document.getElementById("fdaText");
     const fdaRow = document.getElementById("fdaRow");
+    const autoDot = document.getElementById("autoDot");
+    const autoText = document.getElementById("autoText");
+    const autoRow = document.getElementById("autoRow");
     const errorEl = document.getElementById("error");
     const serverUrlEl = document.getElementById("serverUrl");
     const trafficEl = document.getElementById("traffic");
@@ -214,6 +232,22 @@
       fdaText.textContent = hasFda ? "Granted" : "Not granted";
       fdaRow.style.display = hasFda ? "none" : "flex";
 
+      // true/false/null -- null means the last probe couldn't tell either
+      // way (e.g. a transient failure), not that it was denied.
+      const auto = status.automationPermission;
+      autoDot.className = "dot " + (auto === true ? "ok" : auto === false ? "bad" : "unknown");
+      autoText.textContent = auto === true ? "Granted" : auto === false ? "Not granted" : "Checking…";
+      autoRow.style.display = auto === false ? "flex" : "none";
+
+      const rack = status.rack;
+      rackText.textContent = !status.device
+        ? "—"
+        : rack && rack.rackSlot
+        ? `Bay ${rack.rackSlot}${rack.companyName ? " · " + rack.companyName : ""}`
+        : rack && rack.companyName
+        ? `Not in a bay yet · ${rack.companyName}`
+        : "Not in a bay yet — ask whoever manages SendNew";
+
       if (status.lastError) {
         errorEl.textContent = status.lastError;
         errorEl.style.display = "block";
@@ -232,6 +266,9 @@
 
     document.getElementById("fdaBtn").addEventListener("click", () => {
       window.sendnew.openFullDiskAccessSettings();
+    });
+    document.getElementById("autoBtn").addEventListener("click", () => {
+      window.sendnew.openAutomationSettings();
     });
     document.getElementById("accessibilityBtn").addEventListener("click", () => {
       window.sendnew.openAccessibilitySettings();

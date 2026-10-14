@@ -1,4 +1,5 @@
 const fs = require("fs");
+const { execFile } = require("child_process");
 const { shell } = require("electron");
 const { CHAT_DB_PATH } = require("./chatDbWatcher");
 
@@ -42,14 +43,37 @@ function openAccessibilitySettings() {
 function checkPermissions() {
   return {
     fullDiskAccess: canReadChatDb(),
-    // Automation permission can only be confirmed by actually attempting an
-    // AppleScript call and catching the "not authorized" error (-1743) —
-    // there is no static check. The first send attempt does that probing.
   };
+}
+
+// Automation has no static check the way Full Disk Access does -- the only
+// way to know is to actually attempt an AppleScript call and see whether it
+// comes back as "not authorized" (-1743). Previously that probing only ever
+// happened on the first real send, so a missing grant surfaced as a failed
+// message instead of a setup step. This asks Messages.app its own name --
+// harmless, no side effect -- purely so the status window can show this
+// permission the same way it shows Full Disk Access, during setup rather
+// than after the first failure. Resolves true/false, or null if the probe
+// itself couldn't run for an unrelated reason (so that's never mistaken for
+// an actual denial).
+function checkAutomationPermission() {
+  return new Promise((resolve) => {
+    execFile(
+      "osascript",
+      ["-e", 'tell application "Messages" to get name'],
+      { timeout: 8000 },
+      (error, _stdout, stderr) => {
+        if (!error) return resolve(true);
+        if (/-1743/.test(stderr || "")) return resolve(false);
+        resolve(null);
+      }
+    );
+  });
 }
 
 module.exports = {
   checkPermissions,
+  checkAutomationPermission,
   openFullDiskAccessSettings,
   openAutomationSettings,
   openAccessibilitySettings,

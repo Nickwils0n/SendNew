@@ -22,6 +22,7 @@ const {
 } = require("./src/chatDbWatcher");
 const {
   checkPermissions,
+  checkAutomationPermission,
   openFullDiskAccessSettings,
   openAutomationSettings,
   openAccessibilitySettings,
@@ -43,12 +44,21 @@ let statusWindow = null;
 let tray = null;
 let socket = null;
 let stopChatWatcher = null;
+let diagnosticsInterval = null;
 
 const state = {
   connected: false,
   device: null,
   lastError: null,
   traffic: [], // newest first
+  // true/false/null (null = not checked yet, or the last probe couldn't
+  // tell either way) -- see checkAutomationPermission() in permissions.js.
+  automationPermission: null,
+  // GET /agent/me's response: company assignment + rack/switch-port
+  // placement, refreshed in the background so the status window shows
+  // rack assignment the moment an admin does it, without the operator
+  // having to go check the CRM themselves.
+  rackInfo: null,
 };
 
 app.dock?.hide();
@@ -118,6 +128,8 @@ function getStatusPayload() {
     device: state.device,
     lastError: state.lastError,
     permissions: checkPermissions(),
+    automationPermission: state.automationPermission,
+    rack: state.rackInfo,
     traffic: state.traffic,
   };
 }
@@ -184,12 +196,16 @@ async function signOut() {
   socket?.stop();
   await keytar.deletePassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT);
   stopChatWatcher?.();
+  if (diagnosticsInterval) clearInterval(diagnosticsInterval);
+  diagnosticsInterval = null;
   tray?.destroy();
   tray = null;
   statusWindow?.close();
   state.connected = false;
   state.device = null;
   state.traffic = [];
+  state.automationPermission = null;
+  state.rackInfo = null;
   createLoginWindow();
 }
 
@@ -374,6 +390,30 @@ function startAgent(token, device) {
   });
   socket.connect();
 
+  // Keeps the status window's Automation row and rack-placement readout
+  // live without either blocking on a status:get call -- an osascript probe
+  // and a network round trip are both too slow to run inline on every poll,
+  // so this runs them in the background and getStatusPayload() just reads
+  // the cached result.
+  async function refreshDiagnostics() {
+    try {
+      state.automationPermission = await checkAutomationPermission();
+    } catch {
+      // leave whatever was there before -- a probe failure isn't itself a signal
+    }
+    try {
+      const res = await fetch(`${SERVER_HTTP_URL}/agent/me`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      state.rackInfo = res.ok ? await res.json() : null;
+    } catch {
+      state.rackInfo = null;
+    }
+    pushStatus();
+  }
+  refreshDiagnostics();
+  diagnosticsInterval = setInterval(refreshDiagnostics, 5000);
+
   stopChatWatcher = watchChatDb(
     (inbound) => {
       if (inbound.attachment) {
@@ -477,6 +517,10 @@ ipcMain.handle("auth:login", async (_event, { username, password }) => {
   startAgent(data.token, data.device);
   loginWindow?.close();
   loginWindow = null;
+  // Walk straight into the live permission/rack checklist rather than
+  // leaving the operator to go find the (icon-less, text-only) tray item
+  // themselves right after setting up a new Mac mini.
+  createStatusWindow();
   return { ok: true, device: data.device };
 });
 
@@ -496,8 +540,11 @@ ipcMain.handle("auth:register", async (_event, { setupCode, label }) => {
 
   await keytar.setPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT, data.token);
   startAgent(data.token, data.device);
-  // Window stays open here (unlike login) so the renderer can show the
-  // generated username before the operator closes it themselves.
+  // The register window stays open here (unlike login) so the renderer can
+  // show the generated username before the operator closes it themselves --
+  // but the status checklist opens alongside it, so the very next thing
+  // after noting the credentials is the live permission/rack walkthrough.
+  createStatusWindow();
   return { ok: true, device: data.device, credentials: data.credentials };
 });
 

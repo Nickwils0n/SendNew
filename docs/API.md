@@ -251,6 +251,11 @@ anything that doesn't match or is missing the header.
   it to a company afterward the normal way (`POST /admin/devices/:id/assign`).
   `credentials` is returned once for the operator's own records — the app
   itself only needs the `token` it already stored.
+- `GET /agent/me` (device bearer token) → `{ id, username, label, status,
+  companyId, companyName, rackSlot, switchPort }`. The agent polls this
+  every few seconds and shows it in its own status window, so "did this
+  Mac mini get assigned to a company / placed in a bay yet" is answered
+  inside the app itself rather than by tabbing over to the CRM's Rack page.
 - `WS /agent/socket?token=<jwt>` — one persistent connection per device.
   - Agent → server: `heartbeat`, `inbound_message`, `status_update`, `log`.
   - Server → agent: `send_message`, `start_facetime`.

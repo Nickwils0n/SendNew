@@ -1,7 +1,7 @@
 const express = require("express");
 const { nanoid } = require("nanoid");
 const { prisma } = require("../db");
-const { verifyPassword, hashPassword, signDeviceToken } = require("../auth");
+const { verifyPassword, hashPassword, signDeviceToken, verifyDeviceToken } = require("../auth");
 const { asyncHandler } = require("../asyncHandler");
 
 const router = express.Router();
@@ -68,6 +68,36 @@ router.post("/register", asyncHandler(async (req, res) => {
       companyId: device.companyId,
       status: device.status,
     },
+  });
+}));
+
+// The agent's own "did setup work" check -- polled by the status window so
+// an operator sees company assignment and rack placement update live,
+// right inside the app, without tabbing over to the CRM's Rack page.
+router.get("/me", asyncHandler(async (req, res) => {
+  const authHeader = req.header("authorization") || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) return res.status(401).json({ error: "missing bearer token" });
+
+  let deviceId;
+  try {
+    deviceId = verifyDeviceToken(token).sub;
+  } catch {
+    return res.status(401).json({ error: "invalid token" });
+  }
+
+  const device = await prisma.device.findUnique({ where: { id: deviceId }, include: { company: true } });
+  if (!device) return res.status(401).json({ error: "unknown device" });
+
+  res.json({
+    id: device.id,
+    username: device.username,
+    label: device.label,
+    status: device.status,
+    companyId: device.companyId,
+    companyName: device.company ? device.company.name : null,
+    rackSlot: device.rackSlot,
+    switchPort: device.switchPort,
   });
 }));
 
