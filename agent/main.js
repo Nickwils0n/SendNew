@@ -410,6 +410,15 @@ function startAgent(token, device) {
         headers: { authorization: `Bearer ${token}` },
       });
       state.rackInfo = res.ok ? await res.json() : null;
+      // Also keep state.device fresh from this -- startAgent() is called
+      // with no device object when resuming from a stored Keychain token
+      // on launch (the normal case for an already-set-up Mac mini), which
+      // otherwise left state.device null forever and made the status
+      // window think it was never signed in at all.
+      if (state.rackInfo) {
+        state.device = state.rackInfo;
+        refreshTrayMenu();
+      }
     } catch {
       state.rackInfo = null;
     }
