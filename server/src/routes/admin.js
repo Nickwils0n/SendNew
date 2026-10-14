@@ -4,14 +4,10 @@ const { prisma } = require("../db");
 const { hashPassword, requireAdminSecret } = require("../auth");
 const { asyncHandler } = require("../asyncHandler");
 const { newContactsToday, capFor } = require("../conversations");
+const { RACK_BAYS, SWITCH_PORTS } = require("../rackConfig");
 
 const router = express.Router();
 router.use(requireAdminSecret);
-
-// Rack console bounds (one rack, one 32-port switch -- see dmg-build/docs;
-// generalize only if a second rack is actually bought).
-const RACK_BAYS = 20;
-const SWITCH_PORTS = 32;
 
 // Never hand back passwordHash. Every /admin/devices* response goes through
 // this, including the ones that also include the related company.

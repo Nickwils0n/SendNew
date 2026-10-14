@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("sendnew", {
   openAutomationSettings: () => ipcRenderer.invoke("permissions:openAutomation"),
   openAccessibilitySettings: () => ipcRenderer.invoke("permissions:openAccessibility"),
   getStatus: () => ipcRenderer.invoke("status:get"),
+  setRackPlacement: (patch) => ipcRenderer.invoke("rack:set", patch),
   getLaunchAtLogin: () => ipcRenderer.invoke("loginItem:get"),
   setLaunchAtLogin: (enabled) => ipcRenderer.invoke("loginItem:set", enabled),
   onStatusUpdate: (callback) => {

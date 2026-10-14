@@ -256,6 +256,13 @@ anything that doesn't match or is missing the header.
   every few seconds and shows it in its own status window, so "did this
   Mac mini get assigned to a company / placed in a bay yet" is answered
   inside the app itself rather than by tabbing over to the CRM's Rack page.
+- `PATCH /agent/me` (device bearer token) `{ rackSlot?, switchPort? }` —
+  lets the device set *where it physically sits*, nothing else. The status
+  window's Bay/Switch port dropdowns call this directly, so an operator
+  standing at the Mac mini can place it without switching to the CRM.
+  Deliberately narrow: company assignment, caps, and everything else stay
+  on `PATCH /admin/devices/:id` (admin-secret only) — this route can't
+  touch any of that. `409` if the bay/port is already taken.
 - `WS /agent/socket?token=<jwt>` — one persistent connection per device.
   - Agent → server: `heartbeat`, `inbound_message`, `status_update`, `log`.
   - Server → agent: `send_message`, `start_facetime`.

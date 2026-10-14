@@ -48,6 +48,16 @@
     font-size: 12px;
     cursor: pointer;
   }
+  select {
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid #3a3a3c;
+    background: #2c2c2e;
+    color: #f2f2f7;
+    font-size: 12px;
+  }
+  select:disabled { opacity: 0.5; }
+  .rack-error { color: #ff453a; font-size: 11px; display: none; margin-top: -4px; margin-bottom: 4px; }
   #error {
     margin-top: 10px;
     padding: 10px;
@@ -101,9 +111,18 @@
     <span class="value" id="deviceText">—</span>
   </div>
   <div class="row">
-    <span class="label">Rack placement</span>
-    <span class="value" id="rackText">—</span>
+    <span class="label">Bay</span>
+    <span class="value"><select id="baySelect" disabled><option value="">Not in a bay</option></select></span>
   </div>
+  <div class="row">
+    <span class="label">Switch port</span>
+    <span class="value"><select id="portSelect" disabled><option value="">Unplugged</option></select></span>
+  </div>
+  <div class="row">
+    <span class="label">Company</span>
+    <span class="value" id="companyText">—</span>
+  </div>
+  <div id="rackError" class="rack-error"></div>
   <div class="row">
     <span class="label">Full Disk Access</span>
     <span class="value">
@@ -152,7 +171,10 @@
     const connDot = document.getElementById("connDot");
     const connText = document.getElementById("connText");
     const deviceText = document.getElementById("deviceText");
-    const rackText = document.getElementById("rackText");
+    const baySelect = document.getElementById("baySelect");
+    const portSelect = document.getElementById("portSelect");
+    const companyText = document.getElementById("companyText");
+    const rackError = document.getElementById("rackError");
     const fdaDot = document.getElementById("fdaDot");
     const fdaText = document.getElementById("fdaText");
     const fdaRow = document.getElementById("fdaRow");
@@ -240,13 +262,17 @@
       autoRow.style.display = auto === false ? "flex" : "none";
 
       const rack = status.rack;
-      rackText.textContent = !status.device
-        ? "—"
-        : rack && rack.rackSlot
-        ? `Bay ${rack.rackSlot}${rack.companyName ? " · " + rack.companyName : ""}`
-        : rack && rack.companyName
-        ? `Not in a bay yet · ${rack.companyName}`
-        : "Not in a bay yet — ask whoever manages SendNew";
+      const signedIn = !!status.device;
+      baySelect.disabled = portSelect.disabled = !signedIn || savingRack;
+      companyText.textContent = rack && rack.companyName ? rack.companyName : (signedIn ? "Not assigned yet" : "—");
+      // Don't stomp the select while a save is in flight, or while the
+      // operator's own change hasn't round-tripped yet -- the 5s poll would
+      // otherwise occasionally snap the dropdown back and look like the
+      // click didn't register.
+      if (!savingRack) {
+        baySelect.value = rack && rack.rackSlot ? String(rack.rackSlot) : "";
+        portSelect.value = rack && rack.switchPort ? String(rack.switchPort) : "";
+      }
 
       if (status.lastError) {
         errorEl.textContent = status.lastError;
@@ -263,6 +289,36 @@
     window.sendnew.getStatus().then(render);
     window.sendnew.onStatusUpdate(render);
     window.sendnew.onTraffic(prependTraffic);
+
+    for (let n = 1; n <= 20; n++) {
+      const o = document.createElement("option");
+      o.value = String(n);
+      o.textContent = "Bay " + n;
+      baySelect.appendChild(o);
+    }
+    for (let p = 1; p <= 32; p++) {
+      const o = document.createElement("option");
+      o.value = String(p);
+      o.textContent = "Port " + p;
+      portSelect.appendChild(o);
+    }
+
+    let savingRack = false;
+    async function saveRack() {
+      savingRack = true;
+      rackError.style.display = "none";
+      const result = await window.sendnew.setRackPlacement({
+        rackSlot: baySelect.value ? Number(baySelect.value) : null,
+        switchPort: portSelect.value ? Number(portSelect.value) : null,
+      });
+      savingRack = false;
+      if (result.error) {
+        rackError.textContent = result.error;
+        rackError.style.display = "block";
+      }
+    }
+    baySelect.addEventListener("change", saveRack);
+    portSelect.addEventListener("change", saveRack);
 
     document.getElementById("fdaBtn").addEventListener("click", () => {
       window.sendnew.openFullDiskAccessSettings();

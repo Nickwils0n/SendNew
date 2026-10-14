@@ -206,11 +206,15 @@ async function signOut() {
   state.traffic = [];
   state.automationPermission = null;
   state.rackInfo = null;
+  state.token = null;
   createLoginWindow();
 }
 
 function startAgent(token, device) {
   state.device = device || state.device;
+  // Kept so ipcMain handlers outside this closure (rack:set) can still
+  // authenticate as this device; cleared on signOut() like everything else.
+  state.token = token;
 
   socket = new AgentSocket(SERVER_HTTP_URL, token, {
     onOpen: () => {
@@ -489,6 +493,27 @@ ipcMain.handle("permissions:openFullDiskAccess", () => openFullDiskAccessSetting
 ipcMain.handle("permissions:openAutomation", () => openAutomationSettings());
 ipcMain.handle("permissions:openAccessibility", () => openAccessibilitySettings());
 ipcMain.handle("status:get", () => getStatusPayload());
+// Lets the operator set which bay/switch port this Mac mini is in directly
+// from the status window -- see PATCH /agent/me in agentAuth.js. Narrower
+// than the CRM's Rack page on purpose: company assignment stays there.
+ipcMain.handle("rack:set", async (_event, patch) => {
+  if (!state.token) return { error: "not signed in" };
+  let res;
+  try {
+    res = await fetch(`${SERVER_HTTP_URL}/agent/me`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", authorization: `Bearer ${state.token}` },
+      body: JSON.stringify(patch),
+    });
+  } catch (err) {
+    return { error: `Could not reach ${SERVER_HTTP_URL}: ${err.message}` };
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { error: data.error || `could not save (HTTP ${res.status})` };
+  state.rackInfo = data;
+  pushStatus();
+  return { ok: true, rack: data };
+});
 ipcMain.handle("loginItem:get", () => (app.isPackaged ? app.getLoginItemSettings().openAtLogin : false));
 ipcMain.handle("loginItem:set", (_event, enabled) => {
   if (!app.isPackaged) return; // not meaningful for an unpackaged dev run
