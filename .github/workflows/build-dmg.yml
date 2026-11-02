@@ -40,8 +40,21 @@ jobs:
           npx electron-builder --mac dmg \
             --config.extraMetadata.sendNewServerUrl="${{ secrets.SENDNEW_SERVER_URL }}"
 
+      # softprops/action-gh-release infers the release tag from github.ref,
+      # which only exists for an actual tag push -- a manual
+      # "Run workflow" (workflow_dispatch) dispatch has no tag at all,
+      # causing "GitHub Releases requires a tag". Deriving it explicitly
+      # from package.json's version makes both trigger paths work the same
+      # way; re-running without bumping the version just updates that same
+      # release in place.
+      - name: Read agent version
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Upload DMG to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: agent-v${{ steps.pkg.outputs.version }}
+          name: SendNew Agent v${{ steps.pkg.outputs.version }}
           files: agent/dist/*.dmg
           generate_release_notes: true
