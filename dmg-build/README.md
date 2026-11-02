@@ -30,13 +30,18 @@ the `.dmg` attached.
 
 ### Installing on a Mac mini
 
-```bash
-curl -L -o SendNew.dmg "https://github.com/Nickwils0n/SendNew/releases/latest/download/SendNew Agent-1.0.0.dmg"
-open SendNew.dmg
-```
+Each release publishes two DMGs — `SendNew.Agent-<version>-x64.dmg` for
+Intel Macs and `SendNew.Agent-<version>-arm64.dmg` for Apple Silicon.
+Grabbing the wrong one won't run at all (and can present as a confusing
+"this disk image is corrupted" error if the download itself also went
+wrong) -- check which chip your Mac mini has under  → About This Mac
+before downloading. The easiest way to get the right one without guessing
+exact filenames/versions is the **Releases page** in a browser, not a
+hand-built curl URL:
 
-(Or just download it from the Releases page in a browser.) Drag the app into
-Applications.
+https://github.com/Nickwils0n/SendNew/releases/latest
+
+Download the matching `.dmg` and drag the app into Applications.
 
 **First launch only** — this build isn't code-signed (no Apple Developer ID
 yet), so macOS Gatekeeper blocks a plain double-click the first time:

@@ -37,7 +37,7 @@ jobs:
           # `identity: null` from agent/package.json's build.mac config.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
-          npx electron-builder --mac dmg \
+          npx electron-builder --mac dmg --x64 --arm64 \
             --config.extraMetadata.sendNewServerUrl="${{ secrets.SENDNEW_SERVER_URL }}"
 
       # softprops/action-gh-release infers the release tag from github.ref,
