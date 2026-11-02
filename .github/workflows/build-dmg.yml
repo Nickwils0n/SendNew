@@ -37,7 +37,16 @@ jobs:
           # `identity: null` from agent/package.json's build.mac config.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
-          npx electron-builder --mac dmg --x64 --arm64 \
+          # Confirmed via live testing: passing --x64 --arm64 together builds
+          # both DMGs concurrently, and since they share the same volume
+          # title (agent/package.json's build.dmg.title), the two builds
+          # race mounting/unmounting identically-named disk images at the
+          # same time -- "No such file or directory" on the background file
+          # and a failed hdiutil detach. Building them one at a time avoids
+          # the collision entirely.
+          npx electron-builder --mac dmg --x64 \
+            --config.extraMetadata.sendNewServerUrl="${{ secrets.SENDNEW_SERVER_URL }}"
+          npx electron-builder --mac dmg --arm64 \
             --config.extraMetadata.sendNewServerUrl="${{ secrets.SENDNEW_SERVER_URL }}"
 
       # softprops/action-gh-release infers the release tag from github.ref,
