@@ -52,6 +52,27 @@ router.patch("/companies/:id", asyncHandler(async (req, res) => {
   res.json(company);
 }));
 
+// Permanently removes a company -- only when nothing still references it.
+// Refuses rather than cascading, so an orphaned/duplicate company (e.g. one
+// created directly in SendNew that the CRM never connected to) can be
+// cleaned up safely without any risk of silently deleting real device
+// assignments or conversation history that happens to share its id.
+router.delete("/companies/:id", asyncHandler(async (req, res) => {
+  const [deviceCount, conversationCount] = await Promise.all([
+    prisma.device.count({ where: { companyId: req.params.id } }),
+    prisma.conversation.count({ where: { companyId: req.params.id } }),
+  ]);
+  if (deviceCount > 0 || conversationCount > 0) {
+    return res.status(409).json({
+      error: "company still has devices or conversations attached",
+      deviceCount,
+      conversationCount,
+    });
+  }
+  await prisma.company.delete({ where: { id: req.params.id } });
+  res.status(204).end();
+}));
+
 // Provision credentials for a Mac mini. Give the returned username/password
 // to that machine (baked into the DMG build or typed in at first launch).
 router.post("/devices", asyncHandler(async (req, res) => {
