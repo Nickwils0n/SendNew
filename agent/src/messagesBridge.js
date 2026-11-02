@@ -5,7 +5,17 @@ const fs = require("fs");
 const { shell } = require("electron");
 const ffmpegPath = require("ffmpeg-static");
 
-const SCRIPTS_DIR = path.join(__dirname, "..", "scripts");
+// asar packs the whole app into a single archive file that only Electron's
+// own patched fs module can transparently read -- osascript is an external
+// process (execFile below), so it just sees a path that doesn't exist.
+// Confirmed via a real production failure: `osascript:
+// .../app.asar/scripts/send-imessage.applescript: No such file or
+// directory`. asarUnpack in package.json copies scripts/ to a real sibling
+// directory (app.asar.unpacked/), but a path built from __dirname still
+// points *inside* the archive unless rewritten -- this is the standard
+// Electron pattern for handing a file to an external process. A no-op in
+// dev (unpackaged runs have no "app.asar" in the path at all).
+const SCRIPTS_DIR = path.join(__dirname, "..", "scripts").replace("app.asar", "app.asar.unpacked");
 const CALL_WATCH_POLL_MS = 1500;
 const CALL_WATCH_TIMEOUT_MS = 3 * 60 * 1000; // give up watching after 3 minutes either way
 const CALL_WATCH_END_CONFIRM_POLLS = 2; // require 2 consecutive "no window" reads before declaring it over
